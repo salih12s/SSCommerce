@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/* Yazı tipleri next/font ile layout.tsx'te yüklenir. */
+@theme inline {
+  --font-display: var(--font-bricolage), "Segoe UI", sans-serif;
+  --font-sans: var(--font-instrument), "Segoe UI", sans-serif;
+  --font-mono: var(--font-dm-mono), ui-monospace, "Cascadia Mono", monospace;
+}
+
+/* Tasarım token'ları. Açık tema tek ana tema; koyu yalnızca üst şerit ve alt bilgi. */
+@theme {
+  --color-ink: #16181b; /* kömür: üst gezinti, alt bilgi, cihaz gövdesi */
+  --color-ink-2: #23272d;
+  --color-screen: #343a43; /* çizimlerde ekran yüzeyi */
+  --color-on-ink: #f4efe6;
+  --color-on-ink-muted: #b8b2a6;
+  --color-paper: #f6f1e8; /* sıcak kırık beyaz sayfa zemini */
+  --color-paper-2: #ede6d8;
+  --color-card: #fffcf6;
+  --color-line: #d8cebd;
+  --color-fg: #1b1d21;
+  --color-fg-muted: #5a554c;
+  --color-accent: #ff5a14; /* yalnızca zemin/çizim: küçük metinde AA geçmez */
+  --color-accent-deep: #a63400; /* turuncunun metin tonu: açık zeminde 6:1 */
+  --color-focus: #1b1d21;
+  --color-focus-on-ink: #ffb08a;
+
+  --radius-sm: 4px;
+  --radius-md: 10px;
+  --radius-lg: 18px;
+
+  --shadow-card: 0 1px 0 rgb(27 29 33 / 0.06), 0 8px 24px -12px rgb(60 40 20 / 0.22);
+  --shadow-lift: 0 1px 0 rgb(27 29 33 / 0.06), 0 14px 32px -14px rgb(60 40 20 / 0.32);
+
+  --spacing-section: clamp(3.5rem, 8vw, 6.5rem);
+  --spacing-gutter: 1rem;
+
+  --text-display: clamp(2.5rem, 1.2rem + 5.4vw, 5rem);
+  --text-display--line-height: 1.02;
+  --text-display--letter-spacing: -0.035em;
+  --text-title: clamp(1.75rem, 1.2rem + 2vw, 2.75rem);
+  --text-title--line-height: 1.1;
+  --text-title--letter-spacing: -0.025em;
+
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@utility bg-grid {
+  background-image: radial-gradient(circle at 1px 1px, var(--color-line) 1px, transparent 0);
+  background-size: 14px 14px;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: 1rem;
+  }
+
+  body {
+    min-height: 100dvh;
+    background: var(--color-paper);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  a,
+  button,
+  input,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+
+  button {
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  .on-ink :focus-visible {
+    outline-color: var(--color-focus-on-ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

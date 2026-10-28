@@ -1,0 +1,40 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+TestResults/
+*.trx
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+npm-debug.log*
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# Ortam ve sırlar (.env.example şablondur, commit edilir)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+
+# Claude Code yerel ayarları
+.claude/settings.local.json
+
+# IDE / işletim sistemi
+.vs/
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+Thumbs.db
+Desktop.ini
+.DS_Store
