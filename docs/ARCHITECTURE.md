@@ -32,7 +32,7 @@ Bilinçli olarak eklenmeyenler: MediatR/CQRS, generic repository, event bus. Ger
 ## Veri kuralları
 - Para: domain'de C# `decimal`, veritabanında `numeric(18,2)`. API'de **kuruş cinsinden tam sayı** (`priceMinor: 129900` = 1.299,00 TL).
 - Zaman: kalıcı veride UTC (`timestamptz`).
-- Gelecek model (Faz 3, 5, 6): Product → ProductVariant/SKU → Warehouse/InventoryBalance; siparişte fiyat snapshot'ı ve idempotency anahtarı. **Faz 1'de oluşturulmadı.**
+- Gelecek model: Product → ProductVariant/SKU (Faz 3 Catalog) → Warehouse/InventoryBalance (Faz 5 Inventory); siparişte fiyat snapshot'ı ve idempotency anahtarı (Faz 7 Ordering). **Faz 1'de oluşturulmadı.** Stok rezervasyonu MVP dışıdır.
 
 ## Frontend (`apps/web`)
 - Next.js App Router + React + TypeScript + Tailwind CSS. Tek web uygulaması; `/admin` aynı uygulamada açılır (Faz 8).
@@ -44,7 +44,7 @@ Bilinçli olarak eklenmeyenler: MediatR/CQRS, generic repository, event bus. Ger
 ## Güvenlik sınırları
 - Sırlar yalnızca ortam değişkenlerinde (`.env`, Git dışı). Repoda yalnızca `.env.example` bulunur.
 - Faz 1–3'te kimlik doğrulama yok, bu yüzden yazma ucu da yok. Auth ve CSRF Faz 4'te gelir.
-- Ödeme Faz 7'ye kadar yok; arayüz ödeme alınmış izlenimi vermez.
+- MVP'de (Faz 0–9) gerçek ödeme yok. Faz 7 siparişi ödeme almadan oluşturur; gerçek ödeme entegrasyonu sonraki sürüme aittir. Arayüz hiçbir zaman ödeme alınmış izlenimi vermez.
 
 ## Altyapı
 - `docker-compose.yml`: PostgreSQL 17, healthcheck, `sscommerce-pgdata` named volume, host portu `5433` (bkz. DECISIONS D-007).

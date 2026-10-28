@@ -66,3 +66,16 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      # Build yukarıda bir kez alındı; burada yalnızca Playwright koşar (webServer `next start`).
+      - name: E2E (Playwright + axe)
+        run: npm run e2e
+      - name: Upload Playwright results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -1,9 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-const SCREENS_DIR =
-  "C:/Users/salih/AppData/Local/Temp/claude/c--Users-salih-Desktop-SSCommerce/54a53f54-3217-45e6-af95-7dbedafcfabd/scratchpad/screens";
-
 const viewports = [
   { name: "1440", width: 1440, height: 900 },
   { name: "768", width: 768, height: 1024 },
@@ -58,8 +55,11 @@ for (const vp of viewports) {
       expect(await seriousViolations(page)).toEqual([]);
     });
 
-    test("tam sayfa ekran görüntüsü", async ({ page }) => {
-      await page.screenshot({ path: `${SCREENS_DIR}/home-${vp.name}.png`, fullPage: true });
+    test("tam sayfa ekran görüntüsü", async ({ page }, testInfo) => {
+      // test-results/ altına yazılır (Git dışı); makineye özel yol yok.
+      const path = testInfo.outputPath(`home-${vp.name}.png`);
+      await page.screenshot({ path, fullPage: true });
+      await testInfo.attach(`home-${vp.name}`, { path, contentType: "image/png" });
     });
   });
 }

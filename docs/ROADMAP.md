@@ -9,13 +9,17 @@ Tek satıcılı, fiziksel ürün satan, TRY ile çalışan teknoloji/yaşam tarz
 | 0 | Repository ve geliştirici hazırlığı | Git, temel dosyalar, araç envanteri, dokümantasyon | Bu hedefte |
 | 1 | Çalışan full-stack temel | ASP.NET Core 10 API, PostgreSQL + Docker Compose, Next.js iskeleti, CI | Bu hedefte |
 | 2 | Storefront tasarım temeli | Tasarım token'ları, bileşenler, responsive ana sayfa (demo verisiyle) | Bu hedefte |
-| 3 | Katalog | Product → ProductVariant/SKU, kategori, gerçek katalog API'si ve sayfaları | Planlandı |
-| 4 | Kimlik ve güvenlik | ASP.NET Core Identity, oturum, CSRF, rol modeli | Planlandı |
-| 5 | Sepet ve stok | Sepet, Warehouse/InventoryBalance, stok rezervasyonu | Planlandı |
-| 6 | Sipariş | Sipariş akışı, fiyat snapshot'ı, idempotency anahtarları | Planlandı |
-| 7 | Ödeme | Ödeme sağlayıcısı entegrasyonu (önce sandbox) | Planlandı |
-| 8 | Yönetim paneli | Aynı web uygulamasında `/admin`, katalog/sipariş yönetimi | Planlandı |
-| 9 | Yayın ve operasyon | Deploy, gözlemlenebilirlik, performans, yedekleme | Planlandı |
+| 3 | Catalog | Product → ProductVariant/SKU, kategori, gerçek katalog API'si ve sayfaları; ilk EF Core migration | Planlandı |
+| 4 | Identity / Security | ASP.NET Core Identity, cookie oturumu, CSRF, rol modeli (müşteri/yönetici) | Planlandı |
+| 5 | Inventory | Warehouse/InventoryBalance, stok sorgulama ve görünürlüğü (stok **rezervasyonu yok**) | Planlandı |
+| 6 | Cart / Checkout | Sepet, adres ve teslimat bilgisi, sipariş özeti; ödeme adımı yok | Planlandı |
+| 7 | Ordering | Sipariş oluşturma, fiyat snapshot'ı, idempotency anahtarı, sipariş durumları. **Gerçek ödeme olmadan** | Planlandı |
+| 8 | ERP / Admin | Aynı web uygulamasında `/admin`: katalog, stok ve sipariş yönetimi, ERP entegrasyon noktaları | Planlandı |
+| 9 | Kalite ve deployment | Uçtan uca test kapsamı, performans, gözlemlenebilirlik, yedekleme, yayın (TLS ters proxy) | Planlandı |
+
+### MVP dışı (sonraki sürümler)
+- **Gerçek ödeme entegrasyonu** (ödeme sağlayıcısı, 3D Secure, iade akışları).
+- **Stok rezervasyonu** (sepet/sipariş sırasında stok ayırma, süre aşımıyla serbest bırakma).
 
 ## Faz 0–2 görevleri
 

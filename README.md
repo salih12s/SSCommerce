@@ -70,5 +70,6 @@ Web, `/api/backend/*` isteklerini `API_BASE_URL` adresine (varsayılan `http://l
 
 ## Henüz yapılmayanlar
 
-- Gerçek katalog, kimlik doğrulama, sepet/stok, sipariş, ödeme, yönetim paneli (Faz 3–8). Vitrindeki ürünler ve fiyatlar **demo verisidir**; satış ve ödeme yoktur.
+- Catalog (Faz 3), Identity/Security (4), Inventory (5), Cart/Checkout (6), Ordering (7, ödemesiz), ERP/Admin (8), kalite ve deployment (9). Ayrıntı: [ROADMAP](docs/ROADMAP.md). Vitrindeki ürünler ve fiyatlar **demo verisidir**; satış ve ödeme yoktur.
+- MVP dışı: gerçek ödeme entegrasyonu ve stok rezervasyonu.
 - Uzak CI çalıştırması (push sonrası doğrulanacak).

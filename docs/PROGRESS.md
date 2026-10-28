@@ -64,13 +64,31 @@ Kritik ya da yüksek bulgu yok. Ready, yönlendirilemeyen IP'de 3,0–3,1 sn iç
 | F2.3 Responsive ve kalite | PASS | Ana ajan: `npm run lint` → 0; `npx tsc --noEmit` → 0; `npm run build` → 0; `npm run test:e2e` → 0, **23 geçti / 0 kaldı**. Testler 1440/768/390'da: yatay taşma yok; landmark'lar ve tek h1; img alt; axe serious/critical ihlali yok; 390'da mobil menü (aria-expanded, Esc, odak dönüşü); kategori bağlantısı; `/status` 200; bilinmeyen kategori 404. Ana ajan üç boyutun ekran görüntüsünü inceledi; buna göre mobil 2 sütun kart (sayfa 8.799px → 5.902px), SSC kod satırının kırılması ve ampul çizimi düzeltildi. Gerçek telefonda denenmedi (**NOT_VERIFIED**: dokunma, safe-area) | `playwright.config.ts`, `tests/e2e/home.spec.ts`, `package.json` (`@playwright/test` 1.64.1, `@axe-core/playwright` 4.14.0) |
 | Faz 1 gerilemesi | PASS | Faz 2 sonrası `dotnet build` → 0, `dotnet test` → 0 (13/0/1); entegrasyon yukarıda | — |
 
+## Faz 0–2 kalite düzeltmeleri (GitHub kod incelemesi, 2026-10-28)
+
+| Görev | Durum | Kanıt | Dosyalar |
+|---|---|---|---|
+| Q1 Playwright ekran görüntüsü yolu taşınabilir | PASS | Makineye özel sabit yol kaldırıldı; `testInfo.outputPath()` + `testInfo.attach()` kullanılıyor. `grep "C:/Users\|scratchpad\|AppData"` (tests, config, src, .github) → eşleşme yok. Görüntüler `apps/web/test-results/<test>/home-{1440,768,390}.png` altına yazılıyor; `git check-ignore -q test-results/x.png` → 0 (Git dışı) | `apps/web/tests/e2e/home.spec.ts` |
+| Q2 CI'da tarayıcı testleri | PASS (yerel) · uzak CI **BLOCKED_EXTERNAL** | Web job: Build (bir kez) → `npx playwright install --with-deps chromium` → `npm run e2e` (yalnızca `playwright test`; webServer `next start` mevcut build'i açar) → `test-results/` artifact (`!cancelled()`). `playwright.config.ts`: `forbidOnly: !!process.env.CI`. `package.json`: `e2e` script'i eklendi; `test:e2e` = build + e2e. `action-validator` → 0. Yerel `npm run test:e2e` logunda `next build` bir kez görünüyor (satır 7/14 aynı koşu), ardından `playwright test`. GitHub Actions faturalandırma kilidi kullanıcı tarafından biliniyor; uzak koşu denenmedi | `.github/workflows/ci.yml`, `apps/web/playwright.config.ts`, `apps/web/package.json` |
+| Q3 Yol haritası tutarlılığı | PASS | MVP fazları: 3 Catalog, 4 Identity/Security, 5 Inventory, 6 Cart/Checkout, 7 Ordering (ödemesiz), 8 ERP/Admin, 9 Kalite ve deployment. Gerçek ödeme ve stok rezervasyonu "MVP dışı" bölümünde (D-020). Faz referansları taranıp ARCHITECTURE ve README hizalandı. Uygulamadaki "Faz 3'te açılacak" metinleri zaten uyumlu | `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `README.md` |
+
+Yeniden koşulan yerel kontroller (hepsi bu turda, ana ajan):
+- `npm run lint` → 0
+- `npx tsc --noEmit` → 0
+- `npm run test:e2e` → 0, **23 geçti / 0 kaldı**
+- `dotnet build -c Release` → 0
+- `dotnet test -c Release` → 0: 13/0/1 (DB değişkeni yok). `SSCOMMERCE_TEST_POSTGRES` ile (Docker PostgreSQL) → 0: **14/0/0**
+
+1440 ve 390 tam sayfa görüntüleri (1440x4566, 390x5902) üretildi ve incelendi; Faz 2'de onaylanan tasarımla aynı (bu turda UI kodu değişmedi).
+
 ## Git durumu
 
 - Kullanıcı commit + push'u onayladı (2026-10-28).
 - Commit öncesi: `git add -A` → 76 dosya. İçlerinde `.env`, `settings.local.json`, `*.pem/*.key`, `node_modules`, `.next`, `bin`, `obj`, test çıktısı **yok**. `git diff --cached --check` → 0. Eklenen satırlarda sır taraması temiz; yalnızca bilinen sahte değerler var (`change-me-local-only`, `ci-only-password`, test sabitleri). `GOAL_PHASES_0_2.md`'deki Markdown satır sonu boşlukları `.gitattributes` `*.md whitespace=-blank-at-eol` ile bilinçli olarak hariç tutuldu.
 - **Commit `aefaed1`** "SSCommerce Faz 0–2: repo, backend, web, storefront" → 0.
 - **Push** `git push -u origin main` → 0 (`* [new branch] main -> main`). `main` dalı `origin/main`'i izliyor.
-- **Uzak CI: BLOCKED_EXTERNAL.** Run `40610827387` → `failure`. İki job da (Backend .NET, Web Next.js) **0 adımla, hiç başlamadan** kapandı. GitHub annotation: *"The job was not started because your account is locked due to a billing issue."* Kod kaynaklı bir hata değil; CI adımları uzakta doğrulanmadı. Yerelde aynı adımlar PASS. Kullanıcının yapması gereken: GitHub → Settings → Billing and plans bölümünden ödeme/faturalandırma sorununu çözmek, ardından `gh run rerun 40610827387`.
+- **Uzak CI: BLOCKED_EXTERNAL.** Run `40610827387` → `failure`. İki job da (Backend .NET, Web Next.js) **0 adımla, hiç başlamadan** kapandı. GitHub annotation: *"The job was not started because your account is locked due to a billing issue."* Kod kaynaklı bir hata değil; CI adımları uzakta doğrulanmadı. Yerelde aynı adımlar PASS. Kullanıcı bu engeli biliyor ve kabul etti. Uzak CI fazların tamamlanma şartı değil, BLOCKED_EXTERNAL olarak belgelenir.
+- Kalite düzeltmeleri (Q1–Q3) **commit edilmedi**. Commit/push için kullanıcı onayı bekleniyor (PENDING_APPROVAL).
 
 ## Süreç notları
 

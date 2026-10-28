@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "npm run build && playwright test"
+    "e2e": "playwright test",
+    "test:e2e": "npm run build && npm run e2e"
   },
   "dependencies": {
     "next": "16.4.3",
