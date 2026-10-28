@@ -8,10 +8,10 @@ Bunlardan yalnızca `PASS` başarıdır. Aşağıdaki tüm kanıtlar 2026-10-28'
 | Faz | Durum | Kanıt | Commit/push | Sonraki adım |
 |---|---|---|---|---|
 | 0 | **PASS** | Dosyalar mevcut; `git init` 0; `.env` dışlama doğrulandı | PENDING_APPROVAL | — |
-| 1 | **PASS** | F1.1–F1.4 PASS. Docker Compose ile PostgreSQL 17 healthy; gerçek DB testi dahil 14/14; canlı ready 200; volume kalıcılığı doğrulandı | Onaylı, bkz. Git durumu · CI: bkz. Git durumu | — |
-| 2 | **PASS** (yerel) | lint/tsc/build 0; Playwright 23/23; 1440/768/390 ekran görüntüleri incelendi | Onaylı, bkz. Git durumu | Kullanıcı görsel onayı |
+| 1 | **PASS** (yerel) | F1.1–F1.4 PASS. Docker Compose ile PostgreSQL 17 healthy; gerçek DB testi dahil 14/14; canlı ready 200; volume kalıcılığı doğrulandı | `aefaed1` push edildi · uzak CI: BLOCKED_EXTERNAL (GitHub faturalandırma kilidi) | Faturalandırma çözülünce CI'ı yeniden çalıştır |
+| 2 | **PASS** (yerel) | lint/tsc/build 0; Playwright 23/23; 1440/768/390 ekran görüntüleri incelendi | `aefaed1` push edildi | Kullanıcı görsel onayı |
 
-**Yerel teknik durum: bütün kapılar PASS.** Uzak yayın ve CI durumu "Git durumu" bölümünde ayrıca kayıtlı.
+**Yerel teknik durum: bütün kapılar PASS.** Uzak yayın yapıldı (push). Uzak CI ise GitHub hesabının faturalandırma kilidi yüzünden başlamadı (BLOCKED_EXTERNAL); ayrıntı "Git durumu"nda.
 
 ## Ortam
 
@@ -66,12 +66,11 @@ Kritik ya da yüksek bulgu yok. Ready, yönlendirilemeyen IP'de 3,0–3,1 sn iç
 
 ## Git durumu
 
-- Dal `main`, **henüz commit yok**. Uzak depo boş.
-- `git status --short`: yalnızca izlenmeyen dosyalar (`.claude/`, `.editorconfig`, `.env.example`, `.gitattributes`, `.github/`, `.gitignore`, `CLAUDE.md`, `GOAL_PHASES_0_2.md`, `README.md`, `apps/`, `backend/`, `docker-compose.yml`, `docs/`, `global.json`).
-- Commit adayı 76 dosya. İçlerinde `.env`, `settings.local.json`, `*.pem/*.key`, `node_modules`, `.next`, `bin`, `obj` **yok**.
-- `git diff --check` → 0. Henüz commit olmadığı için asıl kontrol dosya başına yapıldı: `git diff --no-index --check /dev/null <dosya>` ile 76 dosyanın hepsi **temiz**. `GOAL_PHASES_0_2.md`'deki Markdown satır sonu boşlukları `.gitattributes` `*.md whitespace=-blank-at-eol` ile bilinçli olarak hariç tutuldu. İki `appsettings` dosyası CRLF'den LF'ye çevrildi (içerik aynı).
-- Sır taraması (parola/secret/api key/token kalıpları): yalnızca bilinen sahte değerler var (`change-me-local-only`, `ci-only-password`, test sabitleri).
-- Commit/push: **PENDING_APPROVAL**. Uzak CI: **PENDING_REMOTE_CI**.
+- Kullanıcı commit + push'u onayladı (2026-10-28).
+- Commit öncesi: `git add -A` → 76 dosya. İçlerinde `.env`, `settings.local.json`, `*.pem/*.key`, `node_modules`, `.next`, `bin`, `obj`, test çıktısı **yok**. `git diff --cached --check` → 0. Eklenen satırlarda sır taraması temiz; yalnızca bilinen sahte değerler var (`change-me-local-only`, `ci-only-password`, test sabitleri). `GOAL_PHASES_0_2.md`'deki Markdown satır sonu boşlukları `.gitattributes` `*.md whitespace=-blank-at-eol` ile bilinçli olarak hariç tutuldu.
+- **Commit `aefaed1`** "SSCommerce Faz 0–2: repo, backend, web, storefront" → 0.
+- **Push** `git push -u origin main` → 0 (`* [new branch] main -> main`). `main` dalı `origin/main`'i izliyor.
+- **Uzak CI: BLOCKED_EXTERNAL.** Run `40610827387` → `failure`. İki job da (Backend .NET, Web Next.js) **0 adımla, hiç başlamadan** kapandı. GitHub annotation: *"The job was not started because your account is locked due to a billing issue."* Kod kaynaklı bir hata değil; CI adımları uzakta doğrulanmadı. Yerelde aynı adımlar PASS. Kullanıcının yapması gereken: GitHub → Settings → Billing and plans bölümünden ödeme/faturalandırma sorununu çözmek, ardından `gh run rerun 40610827387`.
 
 ## Süreç notları
 
