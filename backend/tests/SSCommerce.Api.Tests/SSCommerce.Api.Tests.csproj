@@ -20,6 +20,7 @@
     <ProjectReference Include="..\..\src\SSCommerce.Api\SSCommerce.Api.csproj" />
     <ProjectReference Include="..\..\src\SSCommerce.Domain\SSCommerce.Domain.csproj" />
     <ProjectReference Include="..\..\src\SSCommerce.Application\SSCommerce.Application.csproj" />
+    <ProjectReference Include="..\..\src\SSCommerce.Infrastructure\SSCommerce.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

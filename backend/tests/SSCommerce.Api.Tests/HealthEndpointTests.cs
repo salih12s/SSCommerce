@@ -1,5 +1,7 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using SSCommerce.Api.Tests.Database;
 
 namespace SSCommerce.Api.Tests;
 
@@ -44,10 +46,13 @@ public class HealthEndpointTests
 
         using var json = JsonDocument.Parse(body);
         Assert.Equal("Unhealthy", json.RootElement.GetProperty("status").GetString());
-        var check = Assert.Single(json.RootElement.GetProperty("checks").EnumerateArray());
-        Assert.Equal("postgres", check.GetProperty("name").GetString());
-        Assert.Equal("Unhealthy", check.GetProperty("status").GetString());
-        Assert.True(check.GetProperty("durationMs").GetInt64() >= 0);
+        var checks = json.RootElement.GetProperty("checks").EnumerateArray().ToDictionary(c => c.GetProperty("name").GetString()!);
+        Assert.Equal(["migrations", "postgres"], checks.Keys.Order().ToArray());
+        Assert.All(checks.Values, check =>
+        {
+            Assert.Equal("Unhealthy", check.GetProperty("status").GetString());
+            Assert.True(check.GetProperty("durationMs").GetInt64() >= 0);
+        });
 
         // Bağlantı dizesi parçaları yanıta sızmamalı.
         Assert.DoesNotContain("127.0.0.1", body);
@@ -56,25 +61,112 @@ public class HealthEndpointTests
     }
 
     [Fact]
-    public async Task Ready_returns_200_against_a_real_postgres()
+    public async Task Ready_returns_200_against_a_real_migrated_postgres()
     {
-        var connectionString = Environment.GetEnvironmentVariable("SSCOMMERCE_TEST_POSTGRES");
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            // CI'da sessiz skip yok: değişken adı yanlış yazılırsa ya da servis kalkmazsa test KIRMIZI olur.
-            if (string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase))
-            {
-                Assert.Fail("CI=true ama SSCOMMERCE_TEST_POSTGRES tanımlı değil; gerçek PostgreSQL testi atlanamaz. Değişkeni ve postgres servisini kontrol edin.");
-            }
-
-            Assert.Skip("SSCOMMERCE_TEST_POSTGRES tanımlı değil; gerçek PostgreSQL integration testi atlandı (geçti sayılmaz).");
-        }
-
-        await using var factory = ApiFactory.Create("Production", connectionString);
+        // Migration'ları uygulanmış izole veritabanı (D-029): hem "postgres" hem "migrations" kontrolü sağlıklı olmalı.
+        // CI'da SSCOMMERCE_TEST_POSTGRES yoksa kırmızı, yerelde atlanır (PostgresTestDatabase kuralı).
+        await using var database = await PostgresTestDatabase.CreateAsync(migrate: true);
+        await using var factory = ApiFactory.Create("Production", database.ConnectionString);
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/health/ready", TestContext.Current.CancellationToken);
+        var (status, body) = await ReadyOnceConnectedAsync(client);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, status);
+        using var json = JsonDocument.Parse(body);
+        var checks = json.RootElement.GetProperty("checks").EnumerateArray().ToDictionary(c => c.GetProperty("name").GetString()!);
+        Assert.Equal("Healthy", checks["postgres"].GetProperty("status").GetString());
+        Assert.Equal("Healthy", checks["migrations"].GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Ready_returns_503_when_the_database_has_pending_migrations_and_does_not_leak_details()
+    {
+        // Bağlantı sağlıklı ama şema yok (migration uygulanmadı): D-054 gereği hazır DEĞİL.
+        await using var database = await PostgresTestDatabase.CreateAsync(migrate: false);
+        await using var factory = ApiFactory.Create("Production", database.ConnectionString);
+        using var client = factory.CreateClient();
+
+        var (status, body) = await ReadyOnceConnectedAsync(client);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
+        using var json = JsonDocument.Parse(body);
+        Assert.Equal("Unhealthy", json.RootElement.GetProperty("status").GetString());
+        var checks = json.RootElement.GetProperty("checks").EnumerateArray().ToDictionary(c => c.GetProperty("name").GetString()!);
+        Assert.Equal("Healthy", checks["postgres"].GetProperty("status").GetString());
+        Assert.Equal("Unhealthy", checks["migrations"].GetProperty("status").GetString());
+
+        // Migration adları, tablo adları ve bağlantı bilgisi yanıta sızmaz.
+        Assert.DoesNotContain("AddInventory", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("AddCatalog", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("__EFMigrationsHistory", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("127.0.0.1", body);
+        Assert.DoesNotContain("Password", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(database.Name, body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Sağlıklı veritabanında "postgres" kontrolü yanıt verene kadar yeniden dener. Yavaş makinede soğuk ilk çağrı 3 sn bütçeyi aşıp
+    /// yanlış 503 verebilir; bu testler zamanlamayı değil durumu doğrular. Denemeler biterse son yanıt assertion'a gider, hata gizlenmez.
+    /// </summary>
+    private static async Task<(HttpStatusCode Status, string Body)> ReadyOnceConnectedAsync(HttpClient client)
+    {
+        const int maxAttempts = 5;
+        for (var attempt = 1; ; attempt++)
+        {
+            var response = await client.GetAsync("/health/ready", TestContext.Current.CancellationToken);
+            var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+            using var json = JsonDocument.Parse(body);
+            var postgres = json.RootElement.GetProperty("checks").EnumerateArray().Single(c => c.GetProperty("name").GetString() == "postgres");
+            if (attempt == maxAttempts || postgres.GetProperty("status").GetString() == "Healthy")
+            {
+                return (response.StatusCode, body);
+            }
+        }
+    }
+
+    private static async Task<(HttpStatusCode Status, string MigrationsStatus)> ReadyAsync(HttpClient client)
+    {
+        var response = await client.GetAsync("/health/ready", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var json = JsonDocument.Parse(body);
+        var migrations = json.RootElement.GetProperty("checks").EnumerateArray().Single(c => c.GetProperty("name").GetString() == "migrations");
+        return (response.StatusCode, migrations.GetProperty("status").GetString()!);
+    }
+
+    [Fact]
+    public async Task A_negative_migration_result_is_never_cached_an_unmigrated_database_that_gets_migrated_turns_ready_without_a_restart()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync(migrate: false);
+        await using var factory = ApiFactory.Create("Production", database.ConnectionString);
+        using var client = factory.CreateClient();
+
+        Assert.Equal((HttpStatusCode.ServiceUnavailable, "Unhealthy"), await ReadyAsync(client));
+        Assert.Equal((HttpStatusCode.ServiceUnavailable, "Unhealthy"), await ReadyAsync(client)); // tekrar: hâlâ yeniden değerlendiriliyor
+
+        await using (var context = database.CreateDbContext())
+        {
+            await context.Database.MigrateAsync(TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal((HttpStatusCode.OK, "Healthy"), await ReadyAsync(client)); // AYNI uygulama örneği, yeniden başlatma yok
+    }
+
+    [Fact]
+    public async Task A_positive_migration_result_is_cached_for_the_process_lifetime_without_requerying_the_history()
+    {
+        await using var database = await PostgresTestDatabase.CreateAsync(migrate: true);
+        await using var factory = ApiFactory.Create("Production", database.ConnectionString);
+        using var client = factory.CreateClient();
+        Assert.Equal((HttpStatusCode.OK, "Healthy"), await ReadyAsync(client));
+
+        // Geçmiş tablosunu boşalt (yalnız bu izole test veritabanında): önbelleksiz olsaydı tüm migration'lar "bekleyen" görünür ve 503 olurdu.
+        await database.ExecuteAsync("DELETE FROM \"__EFMigrationsHistory\"", TestContext.Current.CancellationToken);
+
+        Assert.Equal((HttpStatusCode.OK, "Healthy"), await ReadyAsync(client));
+
+        // Kanıt tersten de sağlam: yeni bir uygulama örneği (önbellek boş) aynı veritabanını artık 503 görür.
+        await using var fresh = ApiFactory.Create("Production", database.ConnectionString);
+        using var freshClient = fresh.CreateClient();
+        Assert.Equal((HttpStatusCode.ServiceUnavailable, "Unhealthy"), await ReadyAsync(freshClient));
     }
 }

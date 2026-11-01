@@ -1,0 +1,21 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { isPrivateRoute } from "../../server/privacy.mjs";
+
+test("private routes match on the decoded pathname", () => {
+  for (const url of ["/sepet", "/sepet?x=1", "/sepet/", "/%73epet", "/%73epet?a=b", "//sepet", "/checkout", "/checkout/x", "/hesabim", "/hesabim/adresler", "/hesabim/adresler?x=1", "/giris", "/giris?next=%2Fsepet", "/kayit", "/Sepet", "/%2Fsepet", "/./sepet", "/x/../sepet"]) {
+    assert.equal(isPrivateRoute(url), true, url);
+  }
+});
+
+test("public routes stay cacheable by the framework", () => {
+  for (const url of ["/", "/urun/abc", "/kategori/oyun", "/arama?q=sepet", "/status", "/gorsel-kaynaklari", "/sepetim-degil/x"]) {
+    assert.equal(isPrivateRoute(url), false, url);
+  }
+});
+
+test("malformed encoding and odd input fall back to private instead of throwing", () => {
+  for (const url of ["/%E0%A4%A", "/%", "/%zz/x"]) assert.equal(isPrivateRoute(url), true, url);
+  assert.equal(isPrivateRoute(undefined), false);
+  assert.doesNotThrow(() => isPrivateRoute("http://[::1"));
+});

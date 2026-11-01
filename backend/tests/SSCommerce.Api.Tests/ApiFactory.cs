@@ -15,7 +15,8 @@ internal static class ApiFactory
     public static WebApplicationFactory<Program> Create(
         string environment,
         string? postgresConnectionString,
-        Action<IServiceCollection>? configureTestServices = null)
+        Action<IServiceCollection>? configureTestServices = null,
+        IReadOnlyDictionary<string, string?>? extraConfiguration = null)
     {
         return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
@@ -28,6 +29,12 @@ internal static class ApiFactory
                 {
                     ["ConnectionStrings:Postgres"] = postgresConnectionString ?? string.Empty,
                 });
+
+                // Testin kendi ayarları (ör. rate limit, izinli origin) sonra eklenir ve öncekilerin üzerine yazar.
+                if (extraConfiguration is not null)
+                {
+                    config.AddInMemoryCollection(extraConfiguration);
+                }
             });
 
             if (configureTestServices is not null)

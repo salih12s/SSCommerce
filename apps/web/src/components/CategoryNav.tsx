@@ -1,20 +1,22 @@
 import Link from "next/link";
-import { categories } from "@/content/demo-catalog";
+import { getCategories } from "@/lib/catalog";
 
 type Props = { variant: "bar" | "list"; label: string };
 
-export function CategoryNav({ variant, label }: Props) {
+export async function CategoryNav({ variant, label }: Props) {
+  const result = await getCategories();
+  const categories = result.state === "ok" ? result.data : [];
   const linkBase = "block text-on-ink transition-colors duration-150";
   return (
     <nav aria-label={label}>
-      <ul className={variant === "bar" ? "flex flex-wrap gap-x-8" : "flex flex-col"}>
+      <ul className={variant === "bar" ? "no-scrollbar -mx-2 flex gap-x-1 overflow-x-auto" : "flex flex-col"}>
         {categories.map((c) => (
-          <li key={c.slug}>
+          <li key={c.slug} className="shrink-0">
             <Link
               href={`/kategori/${c.slug}`}
               className={
                 variant === "bar"
-                  ? `${linkBase} py-3 text-[0.9375rem] font-medium hover:text-accent`
+                  ? `${linkBase} px-2.5 py-3 text-[0.9375rem] font-medium whitespace-nowrap hover:text-accent`
                   : `${linkBase} border-t border-white/10 py-3.5 text-lg font-medium`
               }
             >

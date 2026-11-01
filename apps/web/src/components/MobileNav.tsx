@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { CloseIcon, MenuIcon } from "./Icons";
 
 // Açılır kategori menüsü: aria-expanded, aria-controls, Esc ile kapanır,
 // açılınca odak menüye gider, kapanınca düğmeye döner.
@@ -11,7 +12,18 @@ export function MobileNav({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!open) return;
-    panelRef.current?.querySelector<HTMLElement>("a")?.focus();
+    const panel = panelRef.current;
+    function focusFirstLink() {
+      const link = panel?.querySelector<HTMLElement>("a");
+      if (!link) return false;
+      link.focus();
+      return true;
+    }
+    const observer = new MutationObserver(() => {
+      // Do not steal focus if the user has already moved away while links streamed in.
+      if (document.activeElement === buttonRef.current && focusFirstLink()) observer.disconnect();
+    });
+    if (!focusFirstLink() && panel) observer.observe(panel, { childList: true, subtree: true });
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -28,35 +40,24 @@ export function MobileNav({ children }: { children: ReactNode }) {
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("pointerdown", onPointerDown);
     return () => {
+      observer.disconnect();
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("pointerdown", onPointerDown);
     };
   }, [open]);
 
   return (
-    <div className="ml-auto md:hidden">
+    <div className="md:hidden">
       <button
         ref={buttonRef}
         type="button"
         aria-expanded={open}
         aria-controls="mobil-menu"
+        aria-label="Kategoriler"
         onClick={() => setOpen((v) => !v)}
-        className="flex h-11 items-center gap-2 rounded-md border border-white/25 px-3.5 font-medium text-on-ink transition-transform duration-150 ease-out active:scale-[0.97]"
+        className="grid size-11 place-items-center rounded-md text-on-ink transition-transform duration-150 ease-out active:scale-[0.97]"
       >
-        <svg
-          viewBox="0 0 20 20"
-          width="20"
-          height="20"
-          aria-hidden="true"
-          focusable="false"
-          className="stroke-current"
-          fill="none"
-          strokeWidth="2"
-          strokeLinecap="round"
-        >
-          {open ? <path d="M4 4l12 12M16 4L4 16" /> : <path d="M3 6h14M3 10h14M3 14h14" />}
-        </svg>
-        Kategoriler
+        {open ? <CloseIcon /> : <MenuIcon />}
       </button>
       <div
         ref={panelRef}
