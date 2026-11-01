@@ -19,7 +19,7 @@ Tarayıcı ──► Next.js (apps/web) ──/api/backend/* rewrite──► AS
 | `SSCommerce.Application` | Kullanım senaryoları, arayüzler (port'lar), DTO'lar | Domain |
 | `SSCommerce.Infrastructure` | EF Core `DbContext`, Npgsql, dış servis adaptörleri | Application, Domain |
 | `SSCommerce.Api` | HTTP uçları, OpenAPI, hata modeli, composition root | Application, Infrastructure (yalnızca DI kaydı için) |
-| `tests/SSCommerce.Api.Tests` | `WebApplicationFactory` ile gerçek HTTP testleri | Api |
+| `tests/SSCommerce.Api.Tests` | `WebApplicationFactory` ile gerçek HTTP testleri; izole PostgreSQL test veritabanları (D-029) | Api, Infrastructure |
 
 Bilinçli olarak eklenmeyenler: MediatR/CQRS, generic repository, event bus. Gerektikleri gün gerekçesiyle eklenir.
 
@@ -29,23 +29,53 @@ Bilinçli olarak eklenmeyenler: MediatR/CQRS, generic repository, event bus. Ger
 - `GET /openapi/v1.json`: OpenAPI belgesi (yalnızca Development).
 - Hatalar RFC 9457 `ProblemDetails` biçiminde döner (`application/problem+json`).
 
+### Faz 3 Catalog (D-026–D-030)
+Bir istek şu yoldan geçer: `GET /api/v1/products?...` → `Api/Catalog/CatalogEndpoints.cs` (ham sorgu parametrelerini string olarak alır) → `Application/Catalog/ProductListQuery.cs` doğrulayıcısı (sort allowlist, sayfa sınırları; hatada 400 `validation_failed`) → `ICatalogQueries` arayüzü → `Infrastructure/Catalog/CatalogQueries.cs` (EF Core, `AsNoTracking` + projection, parametrik `ILIKE`) → PostgreSQL → DTO (fiyat `Money` ile kuruşa çevrilir) → JSON.
+- Tablolar: `categories`, `products`, `product_variants` (satılabilir SKU), `product_images`. Kurallar DB'de de var: slug/SKU biçimi ve unique, `price >= 0`, `currency = 'TRY'`, tek primary görsel, `ON DELETE RESTRICT`.
+- Public uçlar yalnız aktif kategori + aktif ürün + aktif varyantı gösterir. Faz 5'ten beri `inStock` ve cap'li `availableQuantity` de döner.
+- Seed: `Infrastructure/Persistence/Seed`, yalnız Development'ta `--seed-demo-catalog` ile.
+
+### Faz 4 Identity / Security (D-032–D-036)
+- `SSCommerceDbContext : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>`; `AspNet*` tabloları aynı şemada, ayrı `AddIdentity` migration'ı. Roller `Customer`, `Warehouse`, `Admin` migration'da sabit.
+- Oturum: Identity application cookie'si (HttpOnly, SameSite=Lax, üretimde `__Host-` + Secure). API yönlendirme yapmaz: 401/403 ProblemDetails (`Api/Security/CookieEvents`).
+- Logout güvenlik damgasını yeniler; `SecurityStampValidator` aralığı 0 olduğundan eski cookie hemen reddedilir.
+- CSRF: `/api/v1` grubundaki her değiştiren uçta antiforgery filtresi (`X-CSRF-TOKEN`) ve izinli Origin kontrolü (`Api/Security/RequestProtectionFilters`). Auth uçlarında IP başına rate limit.
+- Policy'ler: `AdminOnly`, `WarehouseOrAdmin` (`Api/Security/AuthPolicies`). Public katalog anonimdir.
+
+### Faz 5 Inventory (D-045–D-048, D-055)
+- Tablolar: `warehouses`, `inventory_balances` (depo + varyant unique, `on_hand_quantity` 0..1.000.000), `stock_movements` (trigger ile yalnız ekleme). Kod `Domain/Inventory`, `Application/Inventory`, `Infrastructure/Inventory`, `Api/Inventory`.
+- Stok yazması tek transaction'dır: `Idempotency-Key` için advisory lock → anahtar kontrolü → depo ve varyantı `FOR SHARE` okuma → koşullu tek SQL → hareket kaydı → commit. Okuma-değiştirme-yazma yoktur; CHECK ve unique index son savunma hattıdır. Yazmalar ve okumalar yalnız Admin'e açıktır (`/api/v1/admin`).
+- `Infrastructure/Catalog/StockAvailability` public stoğun tek tanımıdır: yalnız aktif depolar toplanır, `availableQuantity` 20 ile sınırlanır. Depo bilgisi public yanıtlarda yoktur. Demo katalog için stok seed edilmez.
+
+### Faz 6 Cart / Checkout (D-049–D-054, D-056, D-057)
+- Tablolar: `carts` (kullanıcı başına tek), `cart_items` (sepet + varyant unique, adet 1..20), `customer_addresses` (kullanıcı başına tek varsayılan, partial unique index).
+- Kod `Domain/Cart`, `Domain/Customers`, `Application/{Carts,Addresses,Checkout}`, `Infrastructure/{Carts,Addresses,Checkout}`, `Api/{Carts,Addresses,Checkout}`. Tutarlar `CartCalculator` ile her okumada güncel fiyattan hesaplanır; `unit_price_at_add` yalnız "fiyat değişti" bilgisidir.
+- Sepet yazmaları `carts` satır kilidiyle, adres yazmaları iki argümanlı advisory lock ile kullanıcı başına sıraya girer. Kullanıcı kimliği yalnız oturumdan gelir; başkasının kaynağı 404.
+- `POST /checkout/preview` iş açısından salt okunurdur; kargo hesaplanmadığı için `grandTotalMinor` `null` döner, sipariş ve ödeme oluşturmaz.
+- `DatabaseUnavailableMiddleware` bağlantı düzeyindeki DB hatalarını 503 `service_unavailable` yapar. `/health/ready` bekleyen migration'ı da denetler.
+
 ## Veri kuralları
 - Para: domain'de C# `decimal`, veritabanında `numeric(18,2)`. API'de **kuruş cinsinden tam sayı** (`priceMinor: 129900` = 1.299,00 TL).
 - Zaman: kalıcı veride UTC (`timestamptz`).
-- Gelecek model: Product → ProductVariant/SKU (Faz 3 Catalog) → Warehouse/InventoryBalance (Faz 5 Inventory); siparişte fiyat snapshot'ı ve idempotency anahtarı (Faz 7 Ordering). **Faz 1'de oluşturulmadı.** Stok rezervasyonu MVP dışıdır.
+- Gelecek model: Product → ProductVariant/SKU (Faz 3 Catalog) → Warehouse/InventoryBalance (Faz 5 Inventory); siparişte fiyat snapshot'ı ve idempotency anahtarı (Faz 7 Ordering). Catalog Faz 3'te, Inventory Faz 5'te oluşturuldu; Ordering henüz yok. Stok rezervasyonu MVP dışıdır.
 
 ## Frontend (`apps/web`)
 - Next.js App Router + React + TypeScript + Tailwind CSS. Tek web uygulaması; `/admin` aynı uygulamada açılır (Faz 8).
-- Faz 2 ürün verisi `src/content/demo-catalog.ts` altındaki **demo fixture'larıdır**, backend kataloğu değildir. Fiyatlar kuruş (`priceMinor`) olarak tutulur ve yalnızca biçimlendirilir; hesap yapılmaz.
-- `src/components/`: Header, SearchForm, CategoryNav, MobileNav (tek client bileşen), Hero, CategoryCard, ProductCard, CollectionSection, TrustSection, Footer. Token'lar `globals.css` içindeki `@theme` bloğunda.
-- Rotalar: `/`, `/kategori/[slug]` (Faz 3'e kadar "yakında"), `/arama?q=` (yakında), `/status` (backend health). `src/proxy.ts` bilinmeyen kategori için 404 üretir (D-014).
-- UI testleri: Playwright + axe (`tests/e2e/home.spec.ts`), 1440/768/390.
+- `src/lib/catalog.ts` kategori/ürün DTO'larını API'den `no-store` ile okur. Server Component'lar fiyat ve filtre kurallarını backend'e bırakır. `demo-catalog.ts` artık yalnız görsel sunum, hero/banner ve sekiz kategori kartı için kullanılır; ürün fixture'ları API hatasında yedek kaynak değildir.
+- `src/components/`: Header, SearchForm, CategoryNav, MobileNav (client), BottomNav (yalnız mobil alt gezinti), SoonItem (pasif "Yakında" öğesi: hesap ve sepet), Icons, Hero, CategoryCard, ProductCard, CollectionSection, TrustSection, Footer, art (çizimler). Token'lar `globals.css` içindeki `@theme` bloğunda.
+- Bileşenler (D-025 sonrası): Header, SearchForm, CategoryNav, MobileNav, BottomNav, SoonItem, Icons, Logo, Hero, ServiceStrip, CategoryCard, Banners, ProductTabs, ProductCard, Footer. `art.tsx`, TrustSection ve CollectionSection kaldırıldı.
+- Görseller: `public/images/{hero,promo,banner,kategori,urun}/*.webp` (26 Unsplash fotoğrafı, 592 KB), `next/image` ile yerelde; çalışma anında dış istek yok. Kayıt `src/content/image-credits.ts` + `public/images/CREDITS.md`, liste `/gorsel-kaynaklari`'nda (D-025). Test, her kayıtlı dosyanın diskte olduğunu ve sayfadaki her `/images/` yolunun kayıtlı olduğunu denetler.
+- Rotalar: `/`, `/kategori/[slug]`, `/arama?q=&category=&minPrice=&maxPrice=&sort=&page=&pageSize=`, `/urun/[slug]`, `/giris`, `/kayit`, `/hesabim`, `/hesabim/adresler`, `/sepet`, `/checkout`, `/status`, `/gorsel-kaynaklari`. `src/proxy.ts` kategori ve ürün yokluğunu gerçek API'den stream öncesi kontrol eder ve HTTP 404 üretir. API erişilemezse sayfa hata durumu gösterir.
+- `AuthForm` + `AccountPanel` → `auth-client.ts` → same-origin rewrite → Identity. Her mutasyondan önce yeni CSRF token'ı alınır; HttpOnly auth cookie'sini JS okumaz. Hesap verisi yalnız browser'da `no-store` `/me` ile alınır; HTML/RSC içine kişisel bilgi gömülmez. Kayıt butonu hydration tamamlanana kadar devre dışıdır.
+- Node `server.mjs`, Next'ten önce socket peer IP'sinden forwarding başlıklarını üretir. `WEB_TRUSTED_PROXIES` varsayılan boş; exact-IP zinciri yalnız yetkili ingress'ten işlenir. API mevcut `KnownProxies` + `ForwardLimit=1` ile bu doğrulanmış tek istemci IP'sini kullanır. Next routing/rewrite aynı kalır; standalone output yoktur (D-042).
+- `lib/cart.ts` istemci sepet deposudur: nesil sayacı eski kimliğin ve eski GET'in yanıtını yok sayar, ağ/5xx hatasında sepeti yeniden okur. `lib/api.ts` her yazmadan önce taze CSRF token'ı alır. Tutar hesaplanmaz, API'nin kuruş değerleri gösterilir. `lib/safe-next.ts` açık yönlendirmeyi engeller. `server/privacy.mjs` özel rotalara `private, no-store` ekler.
+- UI testleri: Playwright + axe, 1440/768/390. `main` projesi paralel, fiyat/stok değiştiren `mutating` projesi ondan sonra tek dosyada seri koşar.
 
 ## Güvenlik sınırları
 - Sırlar yalnızca ortam değişkenlerinde (`.env`, Git dışı). Repoda yalnızca `.env.example` bulunur.
-- Faz 1–3'te kimlik doğrulama yok, bu yüzden yazma ucu da yok. Auth ve CSRF Faz 4'te gelir.
+- Faz 3 public okuma uçları; Faz 4 cookie auth, CSRF ve rol policy'leri. Web bu uçlara bağlıdır (D-041); admin CRUD Faz 8'dedir. E-posta doğrulama/parola sıfırlama yoktur.
 - MVP'de (Faz 0–9) gerçek ödeme yok. Faz 7 siparişi ödeme almadan oluşturur; gerçek ödeme entegrasyonu sonraki sürüme aittir. Arayüz hiçbir zaman ödeme alınmış izlenimi vermez.
 
 ## Altyapı
 - `docker-compose.yml`: PostgreSQL 17, healthcheck, `sscommerce-pgdata` named volume, host portu `5433` (bkz. DECISIONS D-007).
-- CI: `.github/workflows/ci.yml` dosyası .NET build/test ve web lint/typecheck/build adımlarını çalıştırır.
+- CI tanımı .NET build/test ve web lint/typecheck/build, HTTP ingress, gerçek DB/API Playwright, proxy rate-limit kontrollerini içerir. E2eHost test DB'sini normal teardown'da temizler. Uzak çalıştırma hâlâ faturalandırma nedeniyle BLOCKED_EXTERNAL; yerel sonuçlar PROGRESS'tedir.
