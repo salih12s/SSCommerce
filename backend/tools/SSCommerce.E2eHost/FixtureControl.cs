@@ -9,13 +9,14 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using SSCommerce.Domain.Catalog;
 using SSCommerce.Domain.Inventory;
+using SSCommerce.Domain.Ordering;
 
 namespace SSCommerce.E2eHost;
 
 /// <summary>
 /// E2E TEST FIXTURE (yalnız bu araç). Üretim API'sinde böyle bir uç YOKTUR (SSCommerce.Api'ye hiçbir şey eklenmez).
 /// İki iş yapar: (1) demo seed'den sonra <c>E2E-DEPO</c> deposu ve SKU sırasına göre belirlenimli stok kurar,
-/// (2) fiyat/stok/aktiflik değiştiren senaryolar için YALNIZ <c>127.0.0.1:5082</c>'ye bağlı küçük bir kontrol ucu açar.
+/// (2) fiyat/stok/aktiflik/sipariş durumu (personel yürütmesi) değiştiren senaryolar için YALNIZ <c>127.0.0.1:5082</c>'ye bağlı küçük bir kontrol ucu açar.
 /// Yazdığı tek yer bu sürecin kendi GUID'li test veritabanıdır (bağlantı dizesi çağıran Program'dan gelir). Stok yazması bir TEST FIXTURE'ıdır:
 /// doğrudan <c>inventory_balances</c> satırıdır, hareket (stock_movements) bırakmaz ve gerçek stok diye sunulmaz.
 /// İstisna iletileri ASLA yazdırılmaz (Npgsql iletileri bağlantı dizesi içerebilir).
@@ -130,6 +131,65 @@ internal static partial class FixtureControl
             return await command.ExecuteNonQueryAsync() > 0 ? Results.NoContent() : Results.NotFound();
         }));
 
+        // Personel yürütmesini (işleme alma, kargolama, tamamlama) taklit eder: üretim API'sinde Playwright'ın çağırabileceği personel oturumu
+        // kurmak gerekmesin. YALNIZ yasal ileri geçiş (Domain geçiş tablosu); 'cancelled' kabul edilmez çünkü iptal stok iadesi yazar —
+        // iptal gerçek müşteri ucundan denenir. Geçmiş satırı da yazılır (aktör: siparişin sahibi, tür 'staff').
+        app.MapPost("/fixture/order-status", (OrderStatusRequest request) => RunAsync(connectionString, async connection =>
+        {
+            if (request.OrderId is not { } orderId || orderId == Guid.Empty ||
+                !OrderStatuses.TryFromWire(request.Status, out var target) || target == OrderStatus.Cancelled)
+            {
+                return Results.BadRequest();
+            }
+
+            await using var transaction = await connection.BeginTransactionAsync();
+            OrderStatus from;
+            Guid ownerId;
+            await using (var read = new NpgsqlCommand("SELECT status, user_id FROM orders WHERE id = @id FOR UPDATE", connection, transaction))
+            {
+                read.Parameters.AddWithValue("id", orderId);
+                await using var rows = await read.ExecuteReaderAsync();
+                if (!await rows.ReadAsync())
+                {
+                    return Results.NotFound();
+                }
+
+                from = OrderStatuses.FromWire(rows.GetString(0));
+                ownerId = rows.GetGuid(1);
+            }
+
+            if (!OrderStateMachine.IsKnownTransition(from, target))
+            {
+                return Results.Conflict();
+            }
+
+            await using (var update = new NpgsqlCommand("UPDATE orders SET status = @status, updated_at = now() WHERE id = @id", connection, transaction))
+            {
+                update.Parameters.AddWithValue("status", OrderStatuses.ToWire(target));
+                update.Parameters.AddWithValue("id", orderId);
+                await update.ExecuteNonQueryAsync();
+            }
+
+            await using (var history = new NpgsqlCommand(
+                """
+                INSERT INTO order_status_history (id, order_id, from_status, to_status, actor_user_id, actor_kind, reason, occurred_at)
+                VALUES (@id, @order, @from, @to, @actor, 'staff', 'e2e fixture', now())
+                """,
+                connection,
+                transaction))
+            {
+                history.Parameters.AddWithValue("id", Guid.CreateVersion7());
+                history.Parameters.AddWithValue("order", orderId);
+                history.Parameters.AddWithValue("from", OrderStatuses.ToWire(from));
+                history.Parameters.AddWithValue("to", OrderStatuses.ToWire(target));
+                history.Parameters.AddWithValue("actor", ownerId);
+                await history.ExecuteNonQueryAsync();
+            }
+
+            await transaction.CommitAsync();
+            return Results.NoContent();
+        }));
+
         app.Start();
         return app;
     }
@@ -176,4 +236,6 @@ internal static partial class FixtureControl
     private sealed record PriceRequest(string? Sku, long? PriceMinor);
 
     private sealed record ActiveRequest(string? Sku, bool? IsActive);
+
+    private sealed record OrderStatusRequest(Guid? OrderId, string? Status);
 }

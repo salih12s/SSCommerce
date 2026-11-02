@@ -69,7 +69,9 @@ public class HealthEndpointTests
         await using var factory = ApiFactory.Create("Production", database.ConnectionString);
         using var client = factory.CreateClient();
 
-        var (status, body) = await ReadyOnceConnectedAsync(client);
+        var response = await client.GetAsync("/health/ready", TestContext.Current.CancellationToken);
+        var status = response.StatusCode;
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, status);
         using var json = JsonDocument.Parse(body);
@@ -86,7 +88,9 @@ public class HealthEndpointTests
         await using var factory = ApiFactory.Create("Production", database.ConnectionString);
         using var client = factory.CreateClient();
 
-        var (status, body) = await ReadyOnceConnectedAsync(client);
+        var response = await client.GetAsync("/health/ready", TestContext.Current.CancellationToken);
+        var status = response.StatusCode;
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
         using var json = JsonDocument.Parse(body);
@@ -102,26 +106,6 @@ public class HealthEndpointTests
         Assert.DoesNotContain("127.0.0.1", body);
         Assert.DoesNotContain("Password", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(database.Name, body, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Sağlıklı veritabanında "postgres" kontrolü yanıt verene kadar yeniden dener. Yavaş makinede soğuk ilk çağrı 3 sn bütçeyi aşıp
-    /// yanlış 503 verebilir; bu testler zamanlamayı değil durumu doğrular. Denemeler biterse son yanıt assertion'a gider, hata gizlenmez.
-    /// </summary>
-    private static async Task<(HttpStatusCode Status, string Body)> ReadyOnceConnectedAsync(HttpClient client)
-    {
-        const int maxAttempts = 5;
-        for (var attempt = 1; ; attempt++)
-        {
-            var response = await client.GetAsync("/health/ready", TestContext.Current.CancellationToken);
-            var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-            using var json = JsonDocument.Parse(body);
-            var postgres = json.RootElement.GetProperty("checks").EnumerateArray().Single(c => c.GetProperty("name").GetString() == "postgres");
-            if (attempt == maxAttempts || postgres.GetProperty("status").GetString() == "Healthy")
-            {
-                return (response.StatusCode, body);
-            }
-        }
     }
 
     private static async Task<(HttpStatusCode Status, string MigrationsStatus)> ReadyAsync(HttpClient client)

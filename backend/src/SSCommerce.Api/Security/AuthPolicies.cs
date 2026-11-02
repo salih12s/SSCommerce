@@ -6,7 +6,10 @@ public static class AuthPolicies
     /// <summary>Yalnız Admin rolü.</summary>
     public const string AdminOnly = "AdminOnly";
 
-    /// <summary>Warehouse ya da Admin rolü (şimdilik KULLANILMAZ: Faz 5 stok uçları yalnız Admin'dir, D-045; depo kapsamlı yetki Faz 8'de).</summary>
+    /// <summary>
+    /// Warehouse ya da Admin rolü. Faz 5 stok uçları yalnız Admin'dir (D-045); bu politikayı Faz 7 personel sipariş uçları kullanır
+    /// (<c>/api/v1/admin/orders</c>, ayrı grup: AdminOnly grubunun içinde olamaz). Depo kapsamlı yetki Faz 8'dedir.
+    /// </summary>
     public const string WarehouseOrAdmin = "WarehouseOrAdmin";
 }
 

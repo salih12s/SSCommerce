@@ -127,7 +127,7 @@ for (const vp of viewports) {
     });
 
     test("demo uyarısı tek yerde: üst şerit", async ({ page }) => {
-      const strip = page.getByText("Demo vitrin: ürünler ve fiyatlar örnektir, satış yakında.");
+      const strip = page.getByText("Demo vitrin: ürünler ve fiyatlar örnektir, ödeme alınmaz.");
       await expect(strip).toHaveCount(1);
       await expect(page.locator("header").getByText(/Demo vitrin: ürünler/)).toBeVisible();
     });

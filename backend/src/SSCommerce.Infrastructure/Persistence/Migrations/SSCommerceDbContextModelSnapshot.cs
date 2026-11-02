@@ -757,7 +757,7 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_stock_movements_operation_key_format", "operation_key ~ '^[A-Za-z0-9_-]{16,128}$'");
 
-                            t.HasCheckConstraint("ck_stock_movements_operation_type", "operation_type IN ('receiving', 'adjustment', 'correction')");
+                            t.HasCheckConstraint("ck_stock_movements_operation_type", "operation_type IN ('receiving', 'adjustment', 'correction', 'order_placement', 'order_cancellation')");
 
                             t.HasCheckConstraint("ck_stock_movements_quantity_delta_nonzero", "quantity_delta <> 0");
 
@@ -815,6 +815,375 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_warehouses_code_format", "code ~ '^[A-Z0-9][A-Z0-9-]{1,31}$'");
 
                             t.HasCheckConstraint("ck_warehouses_name_not_blank", "btrim(name) <> ''");
+                        });
+                });
+
+            modelBuilder.Entity("SSCommerce.Domain.Ordering.Order", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("char(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("DeliveryDistrict")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("delivery_district");
+
+                    b.Property<string>("DeliveryLabel")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("delivery_label");
+
+                    b.Property<string>("DeliveryPhone")
+                        .IsRequired()
+                        .HasColumnType("char(10)")
+                        .HasColumnName("delivery_phone");
+
+                    b.Property<string>("DeliveryPostalCode")
+                        .HasColumnType("char(5)")
+                        .HasColumnName("delivery_postal_code");
+
+                    b.Property<string>("DeliveryProvince")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("delivery_province");
+
+                    b.Property<string>("DeliveryRecipientName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("delivery_recipient_name");
+
+                    b.Property<string>("DeliveryStreetAddress")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("delivery_street_address");
+
+                    b.Property<decimal?>("GrandTotal")
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("grand_total");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<decimal>("ItemSubtotal")
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("item_subtotal");
+
+                    b.Property<long>("OrderNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("order_number");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("OrderNumber"));
+                    NpgsqlPropertyBuilderExtensions.HasIdentityOptions(b.Property<long>("OrderNumber"), 100001L, null, null, null, null, null);
+
+                    b.Property<string>("RequestFingerprint")
+                        .IsRequired()
+                        .HasColumnType("char(64)")
+                        .HasColumnName("request_fingerprint");
+
+                    b.Property<decimal?>("ShippingAmount")
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("shipping_amount");
+
+                    b.Property<string>("ShippingStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("shipping_status");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_orders");
+
+                    b.HasIndex("OrderNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ux_orders_order_number");
+
+                    b.HasIndex("UserId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("ux_orders_user_id_idempotency_key");
+
+                    b.HasIndex("Status", "CreatedAt", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("ix_orders_status_created_at_id");
+
+                    b.HasIndex("UserId", "CreatedAt", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("ix_orders_user_id_created_at_id");
+
+                    b.ToTable("orders", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_orders_currency", "currency = 'TRY'");
+
+                            t.HasCheckConstraint("ck_orders_delivery_district_not_blank", "btrim(delivery_district) <> ''");
+
+                            t.HasCheckConstraint("ck_orders_delivery_label_not_blank", "btrim(delivery_label) <> ''");
+
+                            t.HasCheckConstraint("ck_orders_delivery_phone_format", "delivery_phone ~ '^5[0-9]{9}$'");
+
+                            t.HasCheckConstraint("ck_orders_delivery_postal_code_format", "delivery_postal_code IS NULL OR delivery_postal_code ~ '^(0[1-9]|[1-7][0-9]|8[01])[0-9]{3}$'");
+
+                            t.HasCheckConstraint("ck_orders_delivery_province_not_blank", "btrim(delivery_province) <> ''");
+
+                            t.HasCheckConstraint("ck_orders_delivery_recipient_name_not_blank", "btrim(delivery_recipient_name) <> ''");
+
+                            t.HasCheckConstraint("ck_orders_delivery_street_address_not_blank", "btrim(delivery_street_address) <> ''");
+
+                            t.HasCheckConstraint("ck_orders_grand_total_null", "grand_total IS NULL");
+
+                            t.HasCheckConstraint("ck_orders_idempotency_key_format", "idempotency_key ~ '^[A-Za-z0-9_-]{16,128}$'");
+
+                            t.HasCheckConstraint("ck_orders_item_subtotal_non_negative", "item_subtotal >= 0");
+
+                            t.HasCheckConstraint("ck_orders_request_fingerprint_format", "request_fingerprint ~ '^[0-9a-f]{64}$'");
+
+                            t.HasCheckConstraint("ck_orders_shipping_amount_null", "shipping_amount IS NULL");
+
+                            t.HasCheckConstraint("ck_orders_shipping_status", "shipping_status = 'shippingNotCalculated'");
+
+                            t.HasCheckConstraint("ck_orders_status", "status IN ('placed', 'processing', 'shipped', 'completed', 'cancelled')");
+                        });
+                });
+
+            modelBuilder.Entity("SSCommerce.Domain.Ordering.OrderInventoryAllocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("OrderItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_item_id");
+
+                    b.Property<Guid>("PlacementMovementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("placement_movement_id");
+
+                    b.Property<Guid>("ProductVariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_variant_id");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<Guid>("WarehouseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("warehouse_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_order_inventory_allocations");
+
+                    b.HasIndex("PlacementMovementId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_order_inventory_allocations_placement_movement_id");
+
+                    b.HasIndex("ProductVariantId")
+                        .HasDatabaseName("ix_order_inventory_allocations_product_variant_id");
+
+                    b.HasIndex("WarehouseId")
+                        .HasDatabaseName("ix_order_inventory_allocations_warehouse_id");
+
+                    b.HasIndex("OrderItemId", "WarehouseId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_order_inventory_allocations_order_item_id_warehouse_id");
+
+                    b.ToTable("order_inventory_allocations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_order_inventory_allocations_quantity_positive", "quantity > 0");
+                        });
+                });
+
+            modelBuilder.Entity("SSCommerce.Domain.Ordering.OrderItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("char(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("ImageAlt")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("image_alt");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("image_url");
+
+                    b.Property<decimal>("LineSubtotal")
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("line_subtotal");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)")
+                        .HasColumnName("product_name");
+
+                    b.Property<string>("ProductSlug")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)")
+                        .HasColumnName("product_slug");
+
+                    b.Property<Guid>("ProductVariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_variant_id");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<string>("Sku")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("sku");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("unit_price");
+
+                    b.Property<string>("VariantName")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)")
+                        .HasColumnName("variant_name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_order_items");
+
+                    b.HasIndex("ProductVariantId")
+                        .HasDatabaseName("ix_order_items_product_variant_id");
+
+                    b.HasIndex("OrderId", "ProductVariantId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_order_items_order_id_product_variant_id");
+
+                    b.ToTable("order_items", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_order_items_currency", "currency = 'TRY'");
+
+                            t.HasCheckConstraint("ck_order_items_image_url_format", "image_url IS NULL OR image_url ~ '^/images/[a-z0-9_-]+(/[a-z0-9_-]+)*\\.[a-z0-9]{2,5}$'");
+
+                            t.HasCheckConstraint("ck_order_items_line_subtotal", "line_subtotal = unit_price * quantity");
+
+                            t.HasCheckConstraint("ck_order_items_product_name_not_blank", "btrim(product_name) <> ''");
+
+                            t.HasCheckConstraint("ck_order_items_product_slug_format", "product_slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'");
+
+                            t.HasCheckConstraint("ck_order_items_quantity_range", "quantity BETWEEN 1 AND 20");
+
+                            t.HasCheckConstraint("ck_order_items_sku_format", "sku ~ '^[A-Z0-9]+(-[A-Z0-9]+)*$'");
+
+                            t.HasCheckConstraint("ck_order_items_unit_price_non_negative", "unit_price >= 0");
+
+                            t.HasCheckConstraint("ck_order_items_variant_name_not_blank", "btrim(variant_name) <> ''");
+                        });
+                });
+
+            modelBuilder.Entity("SSCommerce.Domain.Ordering.OrderStatusHistoryEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ActorKind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("actor_kind");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("from_status");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("to_status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_order_status_history");
+
+                    b.HasIndex("ActorUserId")
+                        .HasDatabaseName("ix_order_status_history_actor_user_id");
+
+                    b.HasIndex("OrderId", "OccurredAt", "Id")
+                        .HasDatabaseName("ix_order_status_history_order_id_occurred_at_id");
+
+                    b.ToTable("order_status_history", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_order_status_history_actor_kind", "actor_kind IN ('customer', 'staff')");
+
+                            t.HasCheckConstraint("ck_order_status_history_first_row", "(from_status IS NULL) = (to_status = 'placed')");
+
+                            t.HasCheckConstraint("ck_order_status_history_from_status", "from_status IS NULL OR from_status IN ('placed', 'processing', 'shipped', 'completed', 'cancelled')");
+
+                            t.HasCheckConstraint("ck_order_status_history_reason_not_blank", "reason IS NULL OR btrim(reason) <> ''");
+
+                            t.HasCheckConstraint("ck_order_status_history_status_changed", "from_status IS NULL OR from_status <> to_status");
+
+                            t.HasCheckConstraint("ck_order_status_history_to_status", "to_status IN ('placed', 'processing', 'shipped', 'completed', 'cancelled')");
                         });
                 });
 
@@ -1055,6 +1424,81 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_stock_movements_warehouse");
+                });
+
+            modelBuilder.Entity("SSCommerce.Domain.Ordering.Order", b =>
+                {
+                    b.HasOne("SSCommerce.Infrastructure.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_orders_user");
+                });
+
+            modelBuilder.Entity("SSCommerce.Domain.Ordering.OrderInventoryAllocation", b =>
+                {
+                    b.HasOne("SSCommerce.Domain.Ordering.OrderItem", null)
+                        .WithMany()
+                        .HasForeignKey("OrderItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_inventory_allocations_order_item");
+
+                    b.HasOne("SSCommerce.Domain.Inventory.StockMovement", null)
+                        .WithMany()
+                        .HasForeignKey("PlacementMovementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_inventory_allocations_placement_movement");
+
+                    b.HasOne("SSCommerce.Domain.Catalog.ProductVariant", null)
+                        .WithMany()
+                        .HasForeignKey("ProductVariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_inventory_allocations_product_variant");
+
+                    b.HasOne("SSCommerce.Domain.Inventory.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_inventory_allocations_warehouse");
+                });
+
+            modelBuilder.Entity("SSCommerce.Domain.Ordering.OrderItem", b =>
+                {
+                    b.HasOne("SSCommerce.Domain.Ordering.Order", null)
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_items_order");
+
+                    b.HasOne("SSCommerce.Domain.Catalog.ProductVariant", null)
+                        .WithMany()
+                        .HasForeignKey("ProductVariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_items_product_variant");
+                });
+
+            modelBuilder.Entity("SSCommerce.Domain.Ordering.OrderStatusHistoryEntry", b =>
+                {
+                    b.HasOne("SSCommerce.Infrastructure.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_status_history_actor_user");
+
+                    b.HasOne("SSCommerce.Domain.Ordering.Order", null)
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_order_status_history_order");
                 });
 
             modelBuilder.Entity("SSCommerce.Domain.Catalog.Product", b =>

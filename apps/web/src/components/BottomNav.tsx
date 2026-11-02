@@ -14,7 +14,7 @@ export function BottomNav() {
   const pathname = usePathname();
   const onHome = pathname === "/";
   const onCategory = pathname.startsWith("/kategori");
-  const onAccount = pathname.startsWith("/hesabim") || pathname === "/giris" || pathname === "/kayit";
+  const onAccount = pathname.startsWith("/hesabim") || pathname.startsWith("/siparisler") || pathname === "/giris" || pathname === "/kayit";
 
   const live = (active: boolean) =>
     `${itemBase} ${active ? "font-semibold text-accent-deep" : "text-fg"} active:bg-paper-2`;

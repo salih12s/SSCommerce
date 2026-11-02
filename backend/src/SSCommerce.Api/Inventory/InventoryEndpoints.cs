@@ -68,7 +68,7 @@ public static class InventoryEndpoints
             .WithName("ReceiveStock")
             .WithSummary("Depo girişi (quantity 1..1.000.000). Idempotency-Key başlığı zorunlu.")
             .WithDescription(
-                "Idempotency-Key: ^[A-Za-z0-9_-]{16,128}$. İlk uygulama 201 (replayed:false); aynı anahtar + aynı içerik 200 (replayed:true, bakiye değişmez); " +
+                "Idempotency-Key: ^[A-Za-z0-9_-]{16,128}$ ve 'order-' ile BAŞLAYAMAZ (sipariş düşüm/iade anahtarlarına ayrılmıştır, 400 validation_failed). İlk uygulama 201 (replayed:false); aynı anahtar + aynı içerik 200 (replayed:true, bakiye değişmez); " +
                 "aynı anahtar + farklı içerik 409 idempotency_key_reused. Reddedilen istek anahtarı tüketmez ve hareket bırakmaz. " +
                 "Hatalar: 404 warehouse_not_found/variant_not_found, 409 warehouse_inactive/variant_inactive/stock_limit_exceeded, 503 stock_busy.")
             .Accepts<ReceiveStockRequest>("application/json")

@@ -421,7 +421,11 @@ public class InventoryConstraintTests(MigratedDatabaseFixture fixture) : IClassF
         await AssertViolationAsync("23001", $"UPDATE stock_movements SET reason = 'Değişti' WHERE operation_key = '{key}'");
         await AssertViolationAsync("23001", $"UPDATE stock_movements SET quantity_delta = 99 WHERE operation_key = '{key}'");
         await AssertViolationAsync("23001", $"DELETE FROM stock_movements WHERE operation_key = '{key}'");
-        await AssertViolationAsync("23001", "TRUNCATE TABLE stock_movements");
+        // Faz 7'den beri order_inventory_allocations FK ile stock_movements'a başvurur: düz TRUNCATE trigger'dan önce PostgreSQL'in kendi
+        // kuralına (0A000) takılır. Her iki durumda da boşaltılamaz; CASCADE referans kontrolünü aşar ve DOĞRUDAN trigger'ı (23001) sınar.
+        var plainTruncate = await Assert.ThrowsAsync<PostgresException>(() => Db.ExecuteAsync("TRUNCATE TABLE stock_movements", ct));
+        Assert.Contains(plainTruncate.SqlState, new[] { "23001", "0A000" });
+        await AssertViolationAsync("23001", "TRUNCATE TABLE stock_movements CASCADE");
 
         // Satır olduğu gibi duruyor.
         Assert.Equal("Orijinal", await Db.ScalarAsync<string>($"SELECT reason FROM stock_movements WHERE operation_key = '{key}'", ct));

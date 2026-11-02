@@ -8,6 +8,7 @@ using SSCommerce.Application.Carts;
 using SSCommerce.Application.Catalog;
 using SSCommerce.Application.Checkout;
 using SSCommerce.Application.Inventory;
+using SSCommerce.Application.Orders;
 using SSCommerce.Infrastructure.Addresses;
 using SSCommerce.Infrastructure.Carts;
 using SSCommerce.Infrastructure.Catalog;
@@ -15,6 +16,7 @@ using SSCommerce.Infrastructure.Checkout;
 using SSCommerce.Infrastructure.Health;
 using SSCommerce.Infrastructure.Identity;
 using SSCommerce.Infrastructure.Inventory;
+using SSCommerce.Infrastructure.Orders;
 using SSCommerce.Infrastructure.Persistence;
 
 namespace SSCommerce.Infrastructure;
@@ -62,8 +64,18 @@ public static class DependencyInjection
         services.AddScoped<IAddressService, AddressService>();
         services.AddScoped<ICheckoutPreviewService, CheckoutPreviewService>();
 
+        // Siparişler (F7). Hepsi istek başına: verme ve durum geçişi kendi transaction'ını yönetir, sorgular salt okunurdur.
+        services.AddScoped<OrderReader>();
+        services.AddScoped<IOrderPlacementService, OrderPlacementService>();
+        services.AddScoped<IOrderStatusService, OrderStatusService>();
+        services.AddScoped<IOrderQueries, OrderQueries>();
+
         // Identity çekirdeği (D-032): kullanıcı/rol yönetimi. Cookie şeması ve politikalar Api'de.
         services.AddIdentityServices();
+
+        // Soğuk başlangıç ısınması (D-065): dinlemeye başlamadan ÖNCE çalışır, hatası yutulur. Test türüyle okuyabilsin diye ayrıca tekil kayıtlı.
+        services.AddSingleton<ReadinessWarmUp>();
+        services.AddHostedService(provider => provider.GetRequiredService<ReadinessWarmUp>());
 
         services.AddSingleton<MigrationReadinessState>();
         services.AddHealthChecks()

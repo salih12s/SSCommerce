@@ -16,10 +16,11 @@ public class CatalogMigrationTests
 
     private static readonly string[] InventoryTables = ["inventory_balances", "stock_movements", "warehouses"];
     private static readonly string[] CartAddressTables = ["cart_items", "carts", "customer_addresses"];
+    private static readonly string[] OrderTables = ["order_inventory_allocations", "order_items", "order_status_history", "orders"];
 
-    // Tüm migration'lar uygulanmış şema: geçmiş tablosu + Catalog (InitialCatalog) + Identity (AddIdentity) + Inventory (AddInventory) + Cart/Addresses (AddCartAndAddresses). Sıralama Ordinal.
+    // Tüm migration'lar uygulanmış şema: geçmiş tablosu + Catalog (InitialCatalog) + Identity (AddIdentity) + Inventory (AddInventory) + Cart/Addresses (AddCartAndAddresses) + Ordering (AddOrdering). Sıralama Ordinal.
     private static readonly string[] AllTables =
-        ["__EFMigrationsHistory", .. CatalogTables, .. IdentityTables, .. InventoryTables, .. CartAddressTables];
+        ["__EFMigrationsHistory", .. CatalogTables, .. IdentityTables, .. InventoryTables, .. CartAddressTables, .. OrderTables];
 
     private static async Task<string[]> PublicTablesAsync(PostgresTestDatabase database)
     {
@@ -70,7 +71,7 @@ public class CatalogMigrationTests
         var historyRows = await database.ScalarAsync<long>(
             "SELECT count(*) FROM \"__EFMigrationsHistory\"",
             TestContext.Current.CancellationToken);
-        Assert.Equal(4, historyRows); // InitialCatalog + AddIdentity + AddInventory + AddCartAndAddresses
+        Assert.Equal(5, historyRows); // InitialCatalog + AddIdentity + AddInventory + AddCartAndAddresses + AddOrdering
         Assert.Equal(AllTables.Order(StringComparer.Ordinal), await PublicTablesAsync(database));
     }
 
@@ -111,12 +112,12 @@ public class CatalogMigrationTests
         // İkinci çalıştırma hata vermemeli ve satır/tablo çoğaltmamalı.
         await database.ExecuteAsync(script, TestContext.Current.CancellationToken);
         Assert.Equal(AllTables.Order(StringComparer.Ordinal), await PublicTablesAsync(database));
-        Assert.Equal(4, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", TestContext.Current.CancellationToken));
+        Assert.Equal(5, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", TestContext.Current.CancellationToken));
 
         // EF ile migrate edilmiş veritabanında da script zararsızdır.
         await using var migrated = await PostgresTestDatabase.CreateAsync(migrate: true);
         await migrated.ExecuteAsync(script, TestContext.Current.CancellationToken);
-        Assert.Equal(4, await migrated.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", TestContext.Current.CancellationToken));
+        Assert.Equal(5, await migrated.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -146,7 +147,7 @@ public class CatalogMigrationTests
         var timestampColumns = await database.ScalarAsync<long>(
             "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND column_name IN ('created_at', 'updated_at')",
             TestContext.Current.CancellationToken);
-        Assert.Equal(18, timestampColumns); // 4 katalog + warehouses + inventory_balances + carts + cart_items + customer_addresses (stock_movements.occurred_at sayılmaz)
+        Assert.Equal(20, timestampColumns); // 4 katalog + warehouses + inventory_balances + carts + cart_items + customer_addresses + orders (stock_movements.occurred_at sayılmaz; değişmez sipariş tablolarında created_at/updated_at yok)
 
         var nonUuidIds = await database.ScalarAsync<long>(
             "SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('categories','products','product_variants','product_images') " +

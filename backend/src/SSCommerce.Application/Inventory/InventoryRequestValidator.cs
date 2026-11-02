@@ -32,6 +32,13 @@ public sealed class RequestValidation<T> where T : class
 public static class InventoryRequestValidator
 {
     public const string IdempotencyKeyField = "Idempotency-Key";
+
+    /// <summary>
+    /// Sipariş akışına AYRILMIŞ anahtar öneki (<c>order-place-*</c>, <c>order-cancel-*</c>, D-062). Admin bir anahtarı bu önekle gönderirse
+    /// sonradan gelen bir sipariş iptalinin tekil iade anahtarını ELE GEÇİREBİLİRDİ (iade hareketi unique ihlaliyle düşerdi).
+    /// Büyük/küçük harf duyarsız reddedilir: yanlış bir ipucu bile bırakmamak için.
+    /// </summary>
+    public const string ReservedKeyPrefix = "order-";
     public const int DefaultPage = 1;
     public const int DefaultPageSize = 20;
     public const int MaxPage = 10_000;
@@ -203,6 +210,12 @@ public static class InventoryRequestValidator
         if (value is null)
         {
             errors[IdempotencyKeyField] = [$"{IdempotencyKeyField} başlığı zorunludur."];
+            return null;
+        }
+
+        if (value.StartsWith(ReservedKeyPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            errors[IdempotencyKeyField] = [$"{IdempotencyKeyField} '{ReservedKeyPrefix}' ile başlayamaz: bu önek sipariş akışına ayrılmıştır."];
             return null;
         }
 

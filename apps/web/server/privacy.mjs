@@ -1,6 +1,6 @@
 // Kişiye özel sayfalar `private, no-store` ile sunulur. Eşleşme ham URL metnine değil, ayrıştırılıp çözülmüş yol parçasına bakar:
 // "/%73epet", "//sepet", "/sepet?x=1", "/hesabim/adresler" aynı kurala girer; bozuk yüzde kodlaması istisna fırlatmaz, güvenli tarafa (no-store) düşer.
-const PRIVATE_FIRST_SEGMENTS = new Set(["sepet", "checkout", "hesabim", "giris", "kayit"]);
+const PRIVATE_FIRST_SEGMENTS = new Set(["sepet", "checkout", "hesabim", "siparisler", "giris", "kayit"]);
 
 export function isPrivateRoute(rawUrl) {
   try {

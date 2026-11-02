@@ -12,7 +12,7 @@ export async function Footer() {
         <div>
           <p className="font-display text-xl font-bold">SSCommerce</p>
           <p className="mt-3 max-w-xs text-on-ink-muted">
-            Demo vitrin. Ürünler, fiyatlar ve kategoriler örnektir; satış ve ödeme henüz açık değil.
+            Demo vitrin. Ürünler, fiyatlar ve kategoriler örnektir; ödeme henüz açık değil.
           </p>
         </div>
         <nav aria-label="Alt bilgi kategorileri">

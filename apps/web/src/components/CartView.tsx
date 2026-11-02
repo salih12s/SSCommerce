@@ -129,7 +129,7 @@ export function CartView() {
           </dl>
           {hasUnavailable && <p className="mt-3 text-sm text-fg-muted">Satışta olmayan satırlar ara toplama girmez.</p>}
           <Link href="/checkout" className={`${btnPrimary} mt-5 w-full`}>Teslimat adresine geç</Link>
-          <p className="mt-3 text-sm text-fg-muted">Bu adımda yalnızca özet görürsün. Sipariş verme ve ödeme henüz açık değil.</p>
+          <p className="mt-3 text-sm text-fg-muted">Bir sonraki adımda adresini seçip siparişi onaylarsın. Ödeme alınmaz.</p>
         </>}
       </aside>
     </div>;

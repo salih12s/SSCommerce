@@ -33,7 +33,7 @@ async function Detail({ params }: ProductRouteProps) {
         <p className="mt-6 font-display text-3xl font-bold tabular-nums">{formatPriceMinor(product.startingPriceMinor)} <span className="text-sm font-normal text-fg-muted">başlangıç fiyatı</span></p>
         <p className="mt-3" data-testid="product-stock"><StockLabel inStock={product.inStock} large /></p>
         {product.description && <p className="mt-6 leading-relaxed">{product.description}</p>}
-        <p className="mt-6 rounded-md border border-line bg-card p-4 text-fg-muted">Sipariş verme ve ödeme henüz açık değil. Ürünleri sepete ekleyebilirsin; sepet stok ayırmaz.</p>
+        <p className="mt-6 rounded-md border border-line bg-card p-4 text-fg-muted">Ürünleri sepete ekleyebilirsin; sepet stok ayırmaz, stok sipariş verdiğin anda düşer. Sipariş verirken ödeme alınmaz.</p>
         {product.variants.length > 0 && <AddToCart slug={slug} productName={product.name} variants={product.variants.map((v) => ({ id: v.id, displayName: v.displayName, priceMinor: v.priceMinor, inStock: v.inStock, availableQuantity: v.availableQuantity }))} />}
       </div>
     </div>

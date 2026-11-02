@@ -264,7 +264,9 @@ public class PublicAvailabilityTests(InventoryApiFixture fixture)
                 services.AddSingleton<ILoggerProvider>(log);
                 services.AddLogging(logging => logging.AddFilter(CatalogQueryShapeTests.EfCommandCategory, LogLevel.Information));
             });
+        // Sunucu başlatma ısınma sorgusunu (ReadinessWarmUp) çalıştırır; istek ölçümünden önce temizlenir.
         using var client = factory.CreateClient();
+        log.Commands.Clear();
 
         var response = await client.GetAsync(url, TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();

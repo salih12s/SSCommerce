@@ -62,10 +62,11 @@ public class IdentityMigrationTests
         await using (var context = database.CreateDbContext())
         {
             var pending = (await context.Database.GetPendingMigrationsAsync(ct)).ToArray();
-            Assert.Equal(3, pending.Length); // AddIdentity, ardından Faz 5'in AddInventory'si ve Faz 6'nın AddCartAndAddresses'i
+            Assert.Equal(4, pending.Length); // AddIdentity, ardından Faz 5'in AddInventory'si, Faz 6'nın AddCartAndAddresses'i ve Faz 7'nin AddOrdering'i
             Assert.EndsWith("_AddIdentity", pending[0]);
             Assert.EndsWith("_AddInventory", pending[1]);
             Assert.EndsWith("_AddCartAndAddresses", pending[2]);
+            Assert.EndsWith("_AddOrdering", pending[3]);
             await context.Database.MigrateAsync(ct);
         }
 
@@ -81,11 +82,12 @@ public class IdentityMigrationTests
             "SELECT string_agg(\"MigrationId\", ',' ORDER BY \"MigrationId\") FROM \"__EFMigrationsHistory\"", ct);
         Assert.NotNull(history);
         var ids = history.Split(',');
-        Assert.Equal(4, ids.Length);
+        Assert.Equal(5, ids.Length);
         Assert.EndsWith("_InitialCatalog", ids[0]);
         Assert.EndsWith("_AddIdentity", ids[1]);
         Assert.EndsWith("_AddInventory", ids[2]);
         Assert.EndsWith("_AddCartAndAddresses", ids[3]);
+        Assert.EndsWith("_AddOrdering", ids[4]);
     }
 
     [Fact]
@@ -152,7 +154,7 @@ public class IdentityMigrationTests
         Assert.Equal(before, await CatalogCountsAsync(database));
         Assert.Equal(IdentityTables.Length, await TableCountAsync(database, IdentityTables));
         Assert.Equal(3, await database.ScalarAsync<long>("SELECT count(*) FROM \"AspNetRoles\"", ct));
-        Assert.Equal(4, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
+        Assert.Equal(5, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
     }
 
     [Fact]

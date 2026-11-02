@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SSCommerce.Application.Carts;
 using SSCommerce.Application.Checkout;
+using SSCommerce.Application.Orders;
 using SSCommerce.Infrastructure.Addresses;
 using SSCommerce.Infrastructure.Carts;
 using SSCommerce.Infrastructure.Persistence;
@@ -10,7 +11,7 @@ namespace SSCommerce.Infrastructure.Checkout;
 /// <summary>
 /// Checkout preview (F6.4, D-054): SALT OKUNUR BY CONSTRUCTION. Yalnız iki AsNoTracking okuması (adres, sepet satırları) yapılır;
 /// <c>SaveChanges</c> ve transaction YOKTUR, sipariş/ödeme/rezervasyon tabloları da yoktur. Bu sınıfa yazan bir çağrı eklenirse preview
-/// testi (bakiye, hareket, sepet satırı ve updated_at değişmez) kırmızı olur.
+/// testi (bakiye, hareket, sepet satırı ve updated_at değişmez) kırmızı olur. Faz 7'de yanıta <c>quote</c> eklendi: saf hash hesabıdır, yazma değildir.
 /// Adres sahipliği sorguda (<c>user_id</c>): başkasının adresi "yok" ile aynıdır (404). Ödenecek kesin tutar UYDURULMAZ.
 /// </summary>
 internal sealed class CheckoutPreviewService(SSCommerceDbContext db, CartLineReader reader, TimeProvider clock) : ICheckoutPreviewService
@@ -53,6 +54,7 @@ internal sealed class CheckoutPreviewService(SSCommerceDbContext db, CartLineRea
             }
         }
 
+        var canProceed = cart.Items.All(i => i.Status == CartLineStatus.Available);
         return new CheckoutPreviewResult(
             CheckoutPreviewStatus.Ok,
             new CheckoutPreviewDto(
@@ -64,9 +66,11 @@ internal sealed class CheckoutPreviewService(SSCommerceDbContext db, CartLineRea
                 ShippingStatuses.NotCalculated,
                 GrandTotalMinor: null,
                 cart.Currency,
-                CanProceed: cart.Items.All(i => i.Status == CartLineStatus.Available),
+                canProceed,
                 issues,
-                OrderingAvailable: false,
+                OrderingAvailable: true,
+                // Sipariş verme ile AYNI fonksiyon, AYNI sepet hesabı (tek kaynak). Saf hesap: ek sorgu ya da yazma yok.
+                Quote: canProceed ? OrderQuote.Compute(cart) : null,
                 clock.GetUtcNow()));
     }
 }

@@ -29,7 +29,7 @@ async function CategoryResults({ params, searchParams }: { params: PageProps<"/k
   const current = result.state === "ok" ? result.data.page : 1;
   return <>
     <h1 className="font-display text-title font-extrabold">{title}</h1>
-    <p className="mt-3 text-fg-muted">Demo ürünler ve örnek fiyatlar. Satış henüz açık değil.</p>
+    <p className="mt-3 text-fg-muted">Demo ürünler ve örnek fiyatlar. Ödeme henüz açık değil.</p>
     <form method="get" className="mt-5 flex flex-wrap items-center gap-2">
       <label htmlFor="sort" className="font-medium">Sıralama</label>
       <select id="sort" name="sort" defaultValue={sort || "newest"} className="h-11 rounded-md border border-line bg-card px-3">

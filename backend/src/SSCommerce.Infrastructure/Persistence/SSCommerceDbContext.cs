@@ -5,6 +5,7 @@ using SSCommerce.Domain.Cart;
 using SSCommerce.Domain.Catalog;
 using SSCommerce.Domain.Customers;
 using SSCommerce.Domain.Inventory;
+using SSCommerce.Domain.Ordering;
 using SSCommerce.Infrastructure.Identity;
 using SSCommerce.Infrastructure.Persistence.Configurations;
 using DomainCart = SSCommerce.Domain.Cart.Cart;
@@ -37,6 +38,14 @@ public sealed class SSCommerceDbContext(DbContextOptions<SSCommerceDbContext> op
     public DbSet<CartItem> CartItems => Set<CartItem>();
 
     public DbSet<CustomerAddress> CustomerAddresses => Set<CustomerAddress>();
+
+    public DbSet<Order> Orders => Set<Order>();
+
+    public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+
+    public DbSet<OrderInventoryAllocation> OrderInventoryAllocations => Set<OrderInventoryAllocation>();
+
+    public DbSet<OrderStatusHistoryEntry> OrderStatusHistory => Set<OrderStatusHistoryEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

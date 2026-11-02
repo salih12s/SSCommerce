@@ -11,6 +11,12 @@ public enum StockOperationType
 
     /// <summary>Önceki bir hatanın düzeltmesi (artı/eksi).</summary>
     Correction = 3,
+
+    /// <summary>Sipariş verildiğinde stok tüketimi (D-061): delta her zaman negatif. Yalnız sipariş servisi üretir.</summary>
+    OrderPlacement = 4,
+
+    /// <summary>Sipariş iptalinde stok iadesi (D-062): delta her zaman pozitif. Yalnız sipariş servisi üretir.</summary>
+    OrderCancellation = 5,
 }
 
 /// <summary>
@@ -22,14 +28,22 @@ public static class StockOperationTypes
     public const string Receiving = "receiving";
     public const string Adjustment = "adjustment";
     public const string Correction = "correction";
+    public const string OrderPlacement = "order_placement";
+    public const string OrderCancellation = "order_cancellation";
 
-    public static readonly IReadOnlyList<string> All = [Receiving, Adjustment, Correction];
+    /// <summary>
+    /// DB CHECK'inin kabul ettiği bütün metinler. Genel yönetici girdisi bunun alt kümesini kabul eder (yalnız adjustment/correction,
+    /// bkz. InventoryRequestValidator); sipariş türleri yalnız sipariş servisinden gelir.
+    /// </summary>
+    public static readonly IReadOnlyList<string> All = [Receiving, Adjustment, Correction, OrderPlacement, OrderCancellation];
 
     public static string ToWire(StockOperationType type) => type switch
     {
         StockOperationType.Receiving => Receiving,
         StockOperationType.Adjustment => Adjustment,
         StockOperationType.Correction => Correction,
+        StockOperationType.OrderPlacement => OrderPlacement,
+        StockOperationType.OrderCancellation => OrderCancellation,
         _ => throw new InventoryRuleException("Geçersiz stok işlem türü."),
     };
 
@@ -49,6 +63,12 @@ public static class StockOperationTypes
                 return true;
             case Correction:
                 type = StockOperationType.Correction;
+                return true;
+            case OrderPlacement:
+                type = StockOperationType.OrderPlacement;
+                return true;
+            case OrderCancellation:
+                type = StockOperationType.OrderCancellation;
                 return true;
             default:
                 type = default;

@@ -45,6 +45,17 @@ public sealed class StockMovement
             throw new InventoryRuleException("Depo girişi (receiving) pozitif olmalı.");
         }
 
+        // Sipariş hareketlerinin işareti türden belli: yerleştirme stok düşer, iptal stok iade eder.
+        if (operationType == StockOperationType.OrderPlacement && quantityDelta >= 0)
+        {
+            throw new InventoryRuleException("Sipariş stok tüketimi (order_placement) negatif olmalı.");
+        }
+
+        if (operationType == StockOperationType.OrderCancellation && quantityDelta <= 0)
+        {
+            throw new InventoryRuleException("Sipariş iptal iadesi (order_cancellation) pozitif olmalı.");
+        }
+
         OperationType = operationType;
         ActorUserId = actorUserId;
         Reason = InventoryRules.RequireReason(reason);

@@ -7,6 +7,7 @@ using SSCommerce.Api.Checkout;
 using SSCommerce.Api.Errors;
 using SSCommerce.Api.Health;
 using SSCommerce.Api.OpenApi;
+using SSCommerce.Api.Orders;
 using SSCommerce.Api.Security;
 using SSCommerce.Infrastructure;
 using SSCommerce.Infrastructure.Persistence.Seed;
@@ -52,6 +53,7 @@ api.MapAdminEndpoints();
 api.MapCartEndpoints();
 api.MapAddressEndpoints();
 api.MapCheckoutEndpoints();
+api.MapOrderEndpoints();
 
 // Geliştirme komutu: sunucuyu başlatmadan demo kataloğu yazar ve çıkar. HTTP ucu değildir (D-030).
 if (args.Contains(DemoCatalogSeedCommand.Flag))

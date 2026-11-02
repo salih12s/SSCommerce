@@ -40,6 +40,12 @@ public static class ApiErrorCodes
     public const string AddressNotFound = "address_not_found";
     public const string AddressLimit = "address_limit";
 
+    // Faz 7 (siparişler, docs/CONTRACT_PHASE_7.md).
+    public const string OrderNotFound = "order_not_found";
+    public const string OrderItemInactive = "order_item_inactive";
+    public const string OrderQuoteChanged = "order_quote_changed";
+    public const string OrderTransitionInvalid = "order_transition_invalid";
+
     /// <summary>Kullanıcı başına kilit zaman aşımı (sepet/adres yazması): hiçbir şey yazılmadı, tekrar denenebilir.</summary>
     public const string Busy = "busy";
 

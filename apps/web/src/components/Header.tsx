@@ -14,7 +14,7 @@ export function Header() {
   return (
     <header className="on-ink relative z-20 bg-ink text-on-ink">
       <p className="bg-accent px-4 py-1.5 text-center text-sm font-medium text-ink">
-        Demo vitrin: ürünler ve fiyatlar örnektir, satış yakında.
+        Demo vitrin: ürünler ve fiyatlar örnektir, ödeme alınmaz.
       </p>
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 py-3 md:flex-nowrap md:gap-x-8 md:py-4">

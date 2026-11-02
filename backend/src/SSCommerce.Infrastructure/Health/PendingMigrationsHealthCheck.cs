@@ -14,11 +14,14 @@ namespace SSCommerce.Infrastructure.Health;
 /// </summary>
 /// <param name="state">Süreç boyunca tek örnek. Yalnız OLUMLU sonuç (şema güncel) saklanır; olumsuz sonuç her çağrıda yeniden değerlendirilir,
 /// bu yüzden sonradan migrate edilen veritabanı yeniden başlatma olmadan hazır olur. Sızdırılan migration adı yoktur: yalnız bir bayrak.</param>
+/// <param name="timeProvider">3 sn sayacının saati (D-065). Üretimde sistem saati; test, sayaçtan ÖNCE yapılan yavaş yerel işi sabit saatle
+/// (uyku olmadan, belirlenimli) taklit eder ve sayacın o işi saymadığını kanıtlar.</param>
 public sealed class PendingMigrationsHealthCheck(
     MigrationReadinessState state,
     IServiceScopeFactory scopeFactory,
     IConfiguration configuration,
-    ILogger<PendingMigrationsHealthCheck> logger) : IHealthCheck
+    ILogger<PendingMigrationsHealthCheck> logger,
+    TimeProvider timeProvider) : IHealthCheck
 {
     public const string Name = "migrations";
 
@@ -36,13 +39,17 @@ public sealed class PendingMigrationsHealthCheck(
             return HealthCheckResult.Unhealthy("Veritabanı bağlantısı yapılandırılmamış.");
         }
 
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(PostgresReadinessHealthCheck.Timeout);
-
         try
         {
             await using var scope = scopeFactory.CreateAsyncScope();
+
+            // D-065: kesilemeyen YEREL iş (DbContext çözümü, modelin kurulması) sayaç başlamadan ÖNCE biter. Sayaç yalnız veritabanına sorulan
+            // süreyi ölçer; aksi halde EF'in ilk kullanım maliyeti, veritabanı hiç sorulmadan "zaman aşımı" diye raporlanırdı.
             var db = scope.ServiceProvider.GetRequiredService<SSCommerceDbContext>();
+            _ = db.Model;
+
+            using var budget = new CancellationTokenSource(PostgresReadinessHealthCheck.Timeout, timeProvider);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, budget.Token);
             var pending = (await db.Database.GetPendingMigrationsAsync(timeout.Token)).Count();
             if (pending > 0)
             {

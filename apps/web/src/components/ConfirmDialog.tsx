@@ -4,8 +4,8 @@ import { useEffect, useRef } from "react";
 import { btnPrimary, btnSecondary } from "./ui";
 
 // Yerel <dialog>: showModal odağı içeri alır, Esc kapatır, arka plan etkisizleşir. Kapanınca odak çağıran tarafta yönetilir.
-export function ConfirmDialog({ open, title, description, confirmLabel, busy, onConfirm, onCancel }: {
-  open: boolean; title: string; description: string; confirmLabel: string; busy: boolean; onConfirm: () => void; onCancel: () => void;
+export function ConfirmDialog({ open, title, description, confirmLabel, busyLabel = "Siliniyor…", busy, onConfirm, onCancel }: {
+  open: boolean; title: string; description: string; confirmLabel: string; busyLabel?: string; busy: boolean; onConfirm: () => void; onCancel: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -20,7 +20,7 @@ export function ConfirmDialog({ open, title, description, confirmLabel, busy, on
       <p id="onay-aciklama" className="mt-2 text-fg-muted">{description}</p>
       <div className="mt-5 flex flex-wrap gap-3">
         <button type="button" onClick={onCancel} disabled={busy} className={btnSecondary}>Vazgeç</button>
-        <button type="button" onClick={onConfirm} disabled={busy} className={btnPrimary}>{busy ? "Siliniyor…" : confirmLabel}</button>
+        <button type="button" onClick={onConfirm} disabled={busy} className={btnPrimary}>{busy ? busyLabel : confirmLabel}</button>
       </div>
     </dialog>
   );

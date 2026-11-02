@@ -40,6 +40,7 @@ export function AccountPanel() {
     </dl>
     <ul className="mt-6 flex flex-wrap gap-x-6">
       <li><Link href="/sepet" className="inline-flex min-h-11 items-center font-semibold text-accent-deep underline underline-offset-2">Sepetim</Link></li>
+      <li><Link href="/siparisler" className="inline-flex min-h-11 items-center font-semibold text-accent-deep underline underline-offset-2">Siparişlerim</Link></li>
       <li><Link href="/hesabim/adresler" className="inline-flex min-h-11 items-center font-semibold text-accent-deep underline underline-offset-2">Adreslerim</Link></li>
     </ul>
     {logoutError && <p role="alert" className="mt-5 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">{logoutError}</p>}

@@ -17,10 +17,13 @@ export default defineConfig({
   },
   // İki proje: "main" paralel koşar ve paylaşılan katalog verisini yalnız okur. "mutating" fiyat/stok/aktiflik fixture'ını değiştirir;
   // `dependencies` ile main bittikten sonra başlar ve tek dosya içinde seri (serial) koşar, böylece başka spec değişmiş veri görmez.
+  // "ordering" (Faz 7) aynı düzende bir adım sonra gelir: sipariş stok düşürdüğü için paylaşılan katalogu okuyan hiçbir spec onunla yarışmaz.
   // Not: Playwright worker sayısı proje başına ayarlanamaz; tek worker garantisi "tek dosya + serial mod" ile sağlanır.
   projects: [
-    { name: "main", testIgnore: /mutations\.spec\.ts/ },
+    { name: "main", testIgnore: /(mutations|orders)\.spec\.ts/ },
     { name: "mutating", testMatch: /mutations\.spec\.ts/, dependencies: ["main"], fullyParallel: false },
+    // Siparişler stok TÜKETİR: tek dosya, yalnız main ve mutating bittikten sonra, tek worker'da sırayla koşar. Her test kullandığı stoğu fixture ile geri koyar.
+    { name: "ordering", testMatch: /orders\.spec\.ts/, dependencies: ["mutating"], fullyParallel: false },
   ],
   webServer: {
     // Sunucu mevcut üretim derlemesini 3200'de açar: yerelde `npm run test:e2e` önce build alır,

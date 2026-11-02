@@ -1,19 +1,17 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
-using SSCommerce.Infrastructure.Persistence;
+using Npgsql;
 
 namespace SSCommerce.Infrastructure.Health;
 
 /// <summary>
-/// PostgreSQL'e gerçekten bağlanıp <c>SELECT 1</c> çalıştırır.
-/// Açıklama metinleri sabittir: bağlantı dizesi, host ya da parola asla yanıta sızmaz.
-/// Ayrıntı yalnızca sunucu logundadır (ve orada da yalnızca istisna tipi).
+/// PostgreSQL'e gerçekten bağlanıp <c>SELECT 1</c> çalıştırır. EF Core'a HİÇ dokunmaz (D-065): ham <see cref="NpgsqlConnection"/> kullanır,
+/// böylece EF'in ilk kullanım maliyeti (model kurulumu, JIT) ya da DbContext kurulamaması bu kontrolü etkilemez; yalnız VERİTABANININ yaptığını raporlar.
+/// 3 sn sayacı bağlantı açma + sorgu içindir. Açıklama metinleri sabittir: bağlantı dizesi, host ya da parola asla yanıta sızmaz.
+/// Ayrıntı yalnızca sunucu logundadır (ve orada da yalnızca istisna tipi). Soğuk başlangıç ısınması: <see cref="ReadinessWarmUp"/>.
 /// </summary>
 public sealed class PostgresReadinessHealthCheck(
-    IServiceScopeFactory scopeFactory,
     IConfiguration configuration,
     ILogger<PostgresReadinessHealthCheck> logger) : IHealthCheck
 {
@@ -22,7 +20,8 @@ public sealed class PostgresReadinessHealthCheck(
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(configuration.GetConnectionString(DependencyInjection.ConnectionStringName)))
+        var connectionString = configuration.GetConnectionString(DependencyInjection.ConnectionStringName);
+        if (string.IsNullOrWhiteSpace(connectionString))
         {
             return HealthCheckResult.Unhealthy("Veritabanı bağlantısı yapılandırılmamış.");
         }
@@ -32,10 +31,8 @@ public sealed class PostgresReadinessHealthCheck(
 
         try
         {
-            // DbContext scoped; sağlık kontrolü kendi kapsamını açar.
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<SSCommerceDbContext>();
-            var connection = db.Database.GetDbConnection();
+            // Uygulama bağlantısıyla AYNI dize ve havuz sınırı; bağlantı havuzdan gelir (ısınma havuzu doldurmuştur).
+            await using var connection = new NpgsqlConnection(DependencyInjection.WithPoolLimit(connectionString));
             await connection.OpenAsync(timeout.Token);
             await using var command = connection.CreateCommand();
             command.CommandText = "SELECT 1";

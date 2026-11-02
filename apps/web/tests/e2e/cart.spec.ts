@@ -92,7 +92,7 @@ test.describe("boş sepet", () => {
     await expect(headerCount(page)).toHaveCount(0);
     await page.goto("/checkout");
     await expect(page.getByRole("heading", { level: 2, name: "Teslimat adresi ekle" })).toBeVisible();
-    await expect(page.getByTestId("order-disabled")).toHaveAttribute("aria-disabled", "true");
+    await expect(page.getByTestId("order-submit")).toHaveAttribute("aria-disabled", "true"); // adres ve özet yok: sipariş verilemez
   });
 });
 
@@ -161,8 +161,10 @@ test.describe("gerçek akış: kayıt, ekle, adet, kaldır, yeniden ekle, adres,
     await expect(page.getByTestId("preview-subtotal")).toHaveText(formatPriceMinor(stock12.priceMinor));
     await expect(page.getByTestId("preview-shipping")).toHaveText("Kargo henüz hesaplanmadı");
     await expect(preview).toHaveAttribute("data-can-proceed", "true");
-    await expect(page.getByTestId("order-disabled")).toHaveAttribute("aria-disabled", "true");
-    await expect(page.getByTestId("order-disabled")).toHaveText("Sipariş verme yakında");
+    // Faz 7: özet hazır, devam edilebilir ve güvenlik belirteci alınmışsa düğme açılır (burada sipariş VERİLMEZ; sipariş akışı orders.spec.ts'te).
+    await expect(page.getByTestId("order-submit")).toHaveAttribute("aria-disabled", "false");
+    await expect(page.getByTestId("order-submit")).toHaveText("Sipariş oluştur — ödeme alınmaz");
+    await expect(page.getByTestId("preview-payment")).toHaveText("Alınmaz");
     const body = (await page.locator("main").innerText()).toLowerCase();
     for (const word of ["kart numarası", "cvv", "son kullanma", "ödeme yap", "ödemeyi tamamla", "sipariş verildi", "sipariş alındı", "ödeme başarılı", "toplam tutar:", "ödenecek"]) expect(body, word).not.toContain(word);
     await expect(page.locator("main input[autocomplete^='cc-']")).toHaveCount(0);
@@ -488,7 +490,7 @@ test.describe("teslimat adresi seçimi (iki adres)", () => {
     await expect(page.getByTestId("preview")).toHaveCount(0);
     await expect(summaryAddress).toHaveCount(0);
     await expect(homeRadio).toBeChecked();
-    await expect(page.getByTestId("order-disabled")).toHaveAttribute("aria-disabled", "true");
+    await expect(page.getByTestId("order-submit")).toHaveAttribute("aria-disabled", "true");
     expect(previews.slice(before).map((p) => p.addressId)).toEqual([home.id]);
     await page.unroute("**/api/backend/api/v1/checkout/preview");
     await alert.getByRole("button", { name: "Tekrar dene" }).click();

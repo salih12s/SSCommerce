@@ -92,3 +92,41 @@ export const viewports = [
   { width: 768, height: 1024 },
   { width: 1440, height: 900 },
 ];
+
+// ---- Faz 7: sipariş yardımcıları ----
+export type ApiOrder = {
+  id: string; orderNumber: string; status: string; itemCount: number; subtotalMinor: number; canCancel: boolean; replayed: boolean;
+  items: { id: string; productName: string; variantName: string; unitPriceMinor: number; quantity: number }[];
+  deliveryAddress: { recipientName: string; phone: string; streetAddress: string; district: string; province: string };
+  statusHistory: { fromStatus: string | null; toStatus: string }[];
+};
+/** Sipariş uçları için yazma isteği: Origin + taze CSRF + isteğe bağlı Idempotency-Key. */
+export async function orderSend(request: APIRequestContext, origin: string, path: string, data?: unknown, key?: string) {
+  const token = await csrf(request);
+  return await request.fetch(`${api}${path}`, { method: "POST", data, headers: { "X-CSRF-TOKEN": token, Origin: origin, ...(key ? { "Idempotency-Key": key } : {}) } });
+}
+/** Sunucunun quote'unu alıp (önizleme) API'den sipariş verir; tarayıcı akışının dışında hızlı kurulum içindir. */
+export async function placeOrderApi(request: APIRequestContext, origin: string, addressId: string, key: string = randomUUID()): Promise<ApiOrder> {
+  const preview = await send(request, "POST", "/checkout/preview", origin, { addressId });
+  expect(preview.status()).toBe(200);
+  const { quote } = await preview.json() as { quote: string | null };
+  expect(quote).toMatch(/^[0-9a-f]{64}$/);
+  const response = await orderSend(request, origin, "/orders", { addressId, quote }, key);
+  expect(response.status(), await response.text()).toBe(201);
+  return await response.json() as ApiOrder;
+}
+export async function ordersApi(request: APIRequestContext) {
+  const response = await request.get(`${api}/orders?page=1&pageSize=50`);
+  expect(response.status()).toBe(200);
+  return await response.json() as { items: { id: string; orderNumber: string; status: string }[]; totalCount: number; totalPages: number };
+}
+export async function orderStatusFixture(request: APIRequestContext, orderId: string, status: "processing" | "shipped" | "completed") {
+  const response = await request.post(`${FIXTURE_URL}/fixture/order-status`, { data: { orderId, status } });
+  expect(response.status(), `order-status ${status}`).toBe(204);
+}
+export async function availableOf(request: APIRequestContext, v: Variant) {
+  const response = await request.get(`${api}/products/${v.productSlug}`);
+  const detail = await response.json() as { variants: { id: string; availableQuantity: number }[] };
+  return detail.variants.find((x) => x.id === v.id)!.availableQuantity;
+}
+export const INTENT_KEY = "ssc.order-intent";

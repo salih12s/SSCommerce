@@ -11,9 +11,9 @@ namespace SSCommerce.Api.Tests.Auth;
 /// Mimari kural testi: API yüzeyindeki HER uç, kayıtlı <see cref="EndpointDataSource"/>'tan okunur ve güvenlik kuralları denetlenir.
 /// Yeni bir uç eklenip korumasız bırakılırsa (ör. <c>/api/v1</c> grubunun DIŞINA düşen bir <c>MapPost</c>) bu test kırmızı olur.
 ///   1. POST/PUT/PATCH/DELETE uçları Origin + CSRF filtresi grubunda olmalı (<see cref="RequestProtectionMetadata"/>).
-///   2. /api/v1/admin altındaki her uç AdminOnly politikasına bağlı olmalı.
+///   2. /api/v1/admin altındaki her uç AdminOnly politikasına bağlı olmalı (tek, dar istisna: /api/v1/admin/orders WarehouseOrAdmin).
 ///   3. /api/ altındaki her uç yetki ister, AÇIKÇA anonim bırakılanlar (aşağıdaki liste) hariç. Listeye eklemek bilinçli bir karardır.
-///   4. /api/v1/admin altındaki uçlar ile KULLANICIYA ÖZEL uçlar (cart, addresses, checkout, auth/me, auth/logout) hiçbir koşulda
+///   4. /api/v1/admin altındaki uçlar ile KULLANICIYA ÖZEL uçlar (cart, addresses, checkout, orders, auth/me, auth/logout) hiçbir koşulda
 ///      AllowAnonymous taşıyamaz; anonim izin listesi bile bunları kurtarmaz.
 /// </summary>
 [Collection(AuthApiCollection.Name)]
@@ -39,6 +39,7 @@ public class ApiSurfaceTests(AuthApiFixture fixture)
         "/api/v1/cart",
         "/api/v1/addresses",
         "/api/v1/checkout",
+        "/api/v1/orders",
         "/api/v1/auth/me",
         "/api/v1/auth/logout",
     ];
@@ -47,6 +48,16 @@ public class ApiSurfaceTests(AuthApiFixture fixture)
         PerUserPrefixes.Any(prefix =>
             route.Equals(prefix, StringComparison.OrdinalIgnoreCase) ||
             route.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Faz 7 tek istisnası: <c>/api/v1/admin/orders</c> (personel sipariş uçları) Warehouse'a da açıktır, bu yüzden AdminOnly grubunun dışında,
+    /// <c>WarehouseOrAdmin</c> politikasında durur (iptal gibi stok yazan geçişler Domain durum makinesinde Admin'e kilitlidir). Bu muafiyet
+    /// başka hiçbir admin rotasına ve başka hiçbir politikaya (ör. politikasız <c>[Authorize]</c>) uzanmaz.
+    /// </summary>
+    private static bool IsStaffOrderRouteWithPolicy(string route, IReadOnlyList<IAuthorizeData> authorize) =>
+        (route.Equals("/api/v1/admin/orders", StringComparison.OrdinalIgnoreCase) ||
+         route.StartsWith("/api/v1/admin/orders/", StringComparison.OrdinalIgnoreCase)) &&
+        authorize.Any(a => a.Policy == AuthPolicies.WarehouseOrAdmin);
 
     internal static IReadOnlyList<string> Violations(IEnumerable<Endpoint> endpoints)
     {
@@ -66,7 +77,8 @@ public class ApiSurfaceTests(AuthApiFixture fixture)
             }
 
             if (route.StartsWith("/api/v1/admin", StringComparison.OrdinalIgnoreCase) &&
-                !authorize.Any(a => a.Policy == AuthPolicies.AdminOnly))
+                !authorize.Any(a => a.Policy == AuthPolicies.AdminOnly) &&
+                !IsStaffOrderRouteWithPolicy(route, authorize))
             {
                 violations.Add($"{label}: admin ucu AdminOnly politikasına bağlı değil");
             }
@@ -112,6 +124,33 @@ public class ApiSurfaceTests(AuthApiFixture fixture)
         Assert.Contains(violations, v => v.Contains("/api/v1/admin/users") && v.Contains("AdminOnly"));
         Assert.Contains(violations, v => v.Contains("/api/v1/profile") && v.Contains("anonim"));
         Assert.DoesNotContain(violations, v => v.Contains("/api/v1/admin/products"));
+    }
+
+    [Fact]
+    public void The_staff_order_exemption_is_narrow_only_admin_orders_with_WarehouseOrAdmin_passes()
+    {
+        var staffList = Build("/api/v1/admin/orders", "GET", new AuthorizeAttribute(AuthPolicies.WarehouseOrAdmin));
+        var staffStatus = Build("/api/v1/admin/orders/{id}/status", "POST", new AuthorizeAttribute(AuthPolicies.WarehouseOrAdmin), RequestProtectionMetadata.Instance);
+        var plainAuthorize = Build("/api/v1/admin/orders", "GET", new AuthorizeAttribute());                       // politikasız [Authorize]
+        var otherAdminRoute = Build("/api/v1/admin/warehouses", "GET", new AuthorizeAttribute(AuthPolicies.WarehouseOrAdmin)); // başka admin rotası
+        var lookAlike = Build("/api/v1/admin/ordersx", "GET", new AuthorizeAttribute(AuthPolicies.WarehouseOrAdmin));     // segment sınırı
+
+        Assert.Empty(Violations([staffList, staffStatus]));
+        Assert.Contains(Violations([plainAuthorize]), v => v.Contains("AdminOnly"));
+        Assert.Contains(Violations([otherAdminRoute]), v => v.Contains("AdminOnly"));
+        Assert.Contains(Violations([lookAlike]), v => v.Contains("AdminOnly"));
+    }
+
+    [Theory]
+    [InlineData("/api/v1/admin/orders", "GET")]
+    [InlineData("/api/v1/admin/orders/5/status", "POST")]
+    [InlineData("/api/v1/orders", "POST")]
+    [InlineData("/api/v1/orders/5", "GET")]
+    public void An_order_endpoint_with_AllowAnonymous_turns_the_rule_red(string route, string method)
+    {
+        var leaky = Build(route, method, new AuthorizeAttribute(AuthPolicies.WarehouseOrAdmin), new AllowAnonymousAttribute(), RequestProtectionMetadata.Instance);
+
+        Assert.Contains(Violations([leaky]), v => v.Contains(route) && v.Contains("AllowAnonymous"));
     }
 
     [Theory]

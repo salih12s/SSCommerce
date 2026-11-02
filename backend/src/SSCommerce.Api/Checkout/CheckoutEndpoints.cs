@@ -7,7 +7,8 @@ using SSCommerce.Application.Checkout;
 namespace SSCommerce.Api.Checkout;
 
 /// <summary>
-/// Checkout preview (F6.4, D-054). SALT OKUNUR: sipariş, ödeme, rezervasyon YARATMAZ; stok ve sepet değişmez. POST olmasının nedeni
+/// Checkout preview (F6.4, D-054; Faz 7: quote, D-060). SALT OKUNUR: sipariş, ödeme, rezervasyon YARATMAZ; stok ve sepet değişmez.
+/// Sipariş <c>POST /api/v1/orders</c> ile verilir. POST olmasının nedeni
 /// gövdede adres kimliği taşımak ve adres kimliğini URL'ye/loglara koymamaktır. Auth + CSRF + <c>mutation</c> rate limit uygulanır.
 /// </summary>
 public static class CheckoutEndpoints
@@ -18,9 +19,11 @@ public static class CheckoutEndpoints
 
         checkout.MapPost("/preview", Preview)
             .WithName("CheckoutPreview")
-            .WithSummary("Sepet + adres için ödeme öncesi özet. Kargo hesaplanmadığı için shippingMinor ve grandTotalMinor null; orderingAvailable false.")
+            .WithSummary("Sepet + adres için sipariş öncesi özet. Kargo hesaplanmadığı için shippingMinor ve grandTotalMinor null; orderingAvailable true; canProceed ise quote döner.")
             .WithDescription(
-                "Satır sorunları hata değildir: 200 + canProceed:false. Hatalar: 409 cart_empty, 409 cart_total_too_large, 404 address_not_found (yok ya da başkasının).")
+                "Satır sorunları hata değildir: 200 + canProceed:false (quote null). canProceed:true iken quote, POST /orders gövdesinde aynen geri gönderilen fiyat onayıdır; " +
+                "sipariş fiyatı ASLA ondan gelmez, sunucu kilit altında yeniden hesaplar ve farkta 409 order_quote_changed verir. " +
+                "Hatalar: 409 cart_empty, 409 cart_total_too_large, 404 address_not_found (yok ya da başkasının).")
             .Accepts<CheckoutPreviewRequest>("application/json")
             .RequireRateLimiting(RateLimitPolicies.Mutation)
             .Produces<CheckoutPreviewDto>(StatusCodes.Status200OK)

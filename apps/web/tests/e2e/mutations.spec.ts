@@ -34,7 +34,7 @@ test("stok sıfırlanınca satır 'stokta yok' olur; sepet uyarır, özet devam 
     const issues = page.getByTestId("preview-issues");
     await expect(issues).toContainText("Stokta görünmeyen satır var");
     await expect(issues.getByRole("link", { name: "Sepete dön" })).toHaveAttribute("href", "/sepet");
-    await expect(page.getByTestId("order-disabled")).toHaveAttribute("aria-disabled", "true");
+    await expect(page.getByTestId("order-submit")).toHaveAttribute("aria-disabled", "true");
     await expect(page.getByTestId("preview-shipping")).toHaveText("Kargo henüz hesaplanmadı");
 
     // Ürün sayfası da aynı gerçeği söyler ve ekleme sunulmaz

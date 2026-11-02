@@ -15,7 +15,7 @@ namespace SSCommerce.Api.Tests.Carts;
 public class DatabaseOutageAuthenticatedTests(InventoryApiFixture fixture)
 {
     /// <summary>127.0.0.1'de bir portu dinler ve gerçek PostgreSQL'e aktarır. <see cref="Close"/> dinlemeyi bırakır ve açık bağlantıları koparır; <see cref="Resume"/> AYNI portu yeniden açar.</summary>
-    private sealed class TcpForwarder : IDisposable
+    internal sealed class TcpForwarder : IDisposable
     {
         private readonly string _targetHost;
         private readonly int _targetPort;

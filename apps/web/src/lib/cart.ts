@@ -16,10 +16,12 @@ export type CheckoutPreview = {
   address: { id: string; label: string; recipientName: string; phone: string; province: string; district: string; streetAddress: string; postalCode: string | null; isDefault: boolean };
   itemCount: number; subtotalMinor: number; shippingMinor: number | null; shippingStatus: string; grandTotalMinor: number | null; currency: string;
   canProceed: boolean; issues: CheckoutIssue[]; orderingAvailable: boolean; calculatedAt: string;
+  /** Sunucunun bu sepet için hesapladığı fiyat onayı; yalnız canProceed iken dolu. POST /orders gövdesinde aynen geri gönderilir. */
+  quote: string | null;
 };
 
 // Sepet istemci deposu: üst gezinti (sayaç), ürün sayfası ve /sepet aynı veriyi paylaşır. Sunucudan gelen HTML'de kişisel veri yoktur;
-// sepet yalnızca tarayıcıda, oturum çerezi ile okunur. localStorage/sessionStorage kullanılmaz.
+// sepet yalnızca tarayıcıda, oturum çerezi ile okunur. localStorage/sessionStorage kullanılmaz (sipariş niyeti anahtarı hariç: lib/order-key.ts).
 export type CartState =
   | { status: "unknown" }
   | { status: "loading"; cart: Cart | null }

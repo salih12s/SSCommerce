@@ -64,7 +64,10 @@ public class CatalogQueryShapeTests(CatalogApiFixture fixture)
                 services.AddSingleton<ILoggerProvider>(log);
                 services.AddLogging(logging => logging.AddFilter(EfCommandCategory, LogLevel.Information));
             });
+        // CreateClient sunucuyu BAŞLATIR: barındırılan servisler (ReadinessWarmUp: migration geçmişi sorgusu) bu çağrı dönmeden önce biter.
+        // O başlangıç sorguları isteğin parçası değildir; ölçümden önce temizlenir. Beklenen sayılar gevşetilmez, ısınma kapatılmaz.
         using var client = factory.CreateClient();
+        log.Commands.Clear();
 
         var response = await client.GetAsync(url, TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();

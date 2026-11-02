@@ -7,6 +7,7 @@ using SSCommerce.Api.Tests.Auth;
 using SSCommerce.Api.Tests.Carts;
 using SSCommerce.Api.Tests.Catalog;
 using SSCommerce.Api.Tests.Inventory;
+using SSCommerce.Application.Orders;
 using SSCommerce.Infrastructure.Identity;
 
 namespace SSCommerce.Api.Tests.Checkout;
@@ -50,12 +51,16 @@ public class CheckoutPreviewTests(InventoryApiFixture fixture)
         using var json = await response.JsonAsync();
         var root = json.RootElement;
         Assert.Equal(
-            new[] { "address", "calculatedAt", "canProceed", "currency", "grandTotalMinor", "issues", "itemCount", "lines", "orderingAvailable", "shippingMinor", "shippingStatus", "subtotalMinor" },
+            new[] { "address", "calculatedAt", "canProceed", "currency", "grandTotalMinor", "issues", "itemCount", "lines", "orderingAvailable", "quote", "shippingMinor", "shippingStatus", "subtotalMinor" },
             root.EnumerateObject().Select(p => p.Name).Order().ToArray());
         Assert.Equal(JsonValueKind.Null, root.GetProperty("shippingMinor").ValueKind);
         Assert.Equal(JsonValueKind.Null, root.GetProperty("grandTotalMinor").ValueKind);
         Assert.Equal("shippingNotCalculated", root.GetProperty("shippingStatus").GetString());
-        Assert.False(root.GetProperty("orderingAvailable").GetBoolean());
+        // Faz 7: sipariş artık verilebilir; quote, sipariş verme ile AYNI fonksiyondan çıkan 64 haneli küçük harfli onaltılık özet.
+        Assert.True(root.GetProperty("orderingAvailable").GetBoolean());
+        var quote = root.GetProperty("quote").GetString();
+        Assert.Matches("^[0-9a-f]{64}$", quote);
+        Assert.Equal(OrderQuote.Compute(30_000, [(variant, 3, 10_000)]), quote);
         Assert.True(root.GetProperty("canProceed").GetBoolean());
         Assert.Equal(0, root.GetProperty("issues").GetArrayLength());
         Assert.Equal(3, root.GetProperty("itemCount").GetInt32());
@@ -70,7 +75,7 @@ public class CheckoutPreviewTests(InventoryApiFixture fixture)
     }
 
     [Fact]
-    public async Task The_preview_writes_nothing_balances_movements_cart_rows_addresses_and_updated_at_are_untouched_and_no_order_tables_exist()
+    public async Task The_preview_writes_nothing_balances_movements_cart_rows_addresses_and_updated_at_are_untouched_and_no_order_or_payment_rows_appear()
     {
         var (customer, address, variant, warehouse) = await ReadyCartAsync(stock: 10, quantity: 4);
         await Task.Delay(30, TestContext.Current.CancellationToken); // updated_at değişseydi farklı olurdu
@@ -86,11 +91,21 @@ public class CheckoutPreviewTests(InventoryApiFixture fixture)
         Assert.Equal(1, await fixture.VersionAsync(warehouse, variant));
         Assert.Equal(0, await fixture.MovementCountAsync(variant));
         Assert.Equal(4, await fixture.LineQuantityAsync(customer.UserId, variant));
-        // Sipariş/ödeme/rezervasyon tabloları yoktur (Faz 7'ye kadar): preview onları üretemez.
+        // Sipariş tabloları artık VAR (Faz 7) ama preview onlara hiçbir şey yazmaz: bu kullanıcı için sipariş, kalem, dağıtım, geçmiş ve
+        // bu varyant için sipariş hareketi satırı yoktur.
+        Assert.Equal(0, await fixture.ScalarAsync<long>($"SELECT count(*) FROM orders WHERE user_id = '{customer.UserId}'"));
+        Assert.Equal(0, await fixture.ScalarAsync<long>($"SELECT count(*) FROM order_items WHERE product_variant_id = '{variant}'"));
+        Assert.Equal(0, await fixture.ScalarAsync<long>($"SELECT count(*) FROM order_inventory_allocations WHERE product_variant_id = '{variant}'"));
+        Assert.Equal(0, await fixture.ScalarAsync<long>($"SELECT count(*) FROM order_status_history WHERE actor_user_id = '{customer.UserId}'"));
         Assert.Equal(
             0,
             await fixture.ScalarAsync<long>(
-                "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('orders', 'order_items', 'payments', 'stock_reservations', 'reservations')"));
+                $"SELECT count(*) FROM stock_movements WHERE product_variant_id = '{variant}' AND operation_type IN ('order_placement', 'order_cancellation')"));
+        // Ödeme ve rezervasyon tabloları hâlâ yoktur: sipariş ödenmemiş operasyon kaydıdır, preview rezervasyon yaratmaz.
+        Assert.Equal(
+            0,
+            await fixture.ScalarAsync<long>(
+                "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('payments', 'stock_reservations', 'reservations')"));
     }
 
     [Fact]
@@ -156,7 +171,8 @@ public class CheckoutPreviewTests(InventoryApiFixture fixture)
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var json = await response.JsonAsync();
         Assert.False(json.RootElement.GetProperty("canProceed").GetBoolean());
-        var issues = json.RootElement.GetProperty("issues").EnumerateArray().ToDictionary(
+        Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("quote").ValueKind); // ilerlenemeyen sepete onay verilmez
+        var issues =json.RootElement.GetProperty("issues").EnumerateArray().ToDictionary(
             i => i.GetProperty("itemId").GetGuid(),
             i => i.GetProperty("code").GetString());
         var lines = json.RootElement.GetProperty("lines").EnumerateArray().ToDictionary(l => l.GetProperty("variantId").GetGuid());

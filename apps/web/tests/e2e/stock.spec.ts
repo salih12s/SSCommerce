@@ -103,9 +103,9 @@ for (const [width, height] of [[390, 844], [768, 1024], [1440, 900]]) {
       const text = await main.innerText();
       for (const match of text.matchAll(/Son (\d+) adet/g)) expect(Number(match[1])).toBeLessThanOrEqual(5);
       expect(text).not.toMatch(/\b20\+?\s*adet|stok(ta)?\s*:?\s*\d+/i);
-      // Sipariş ve ödeme açık değil: dürüst metin durur; satın alma/ödeme kontrolü yok. Anonim kullanıcı için sepete ekleme yerine
+      // Ödeme yok: dürüst metin durur (sipariş verirken ödeme alınmaz); satın alma/ödeme kontrolü yok. Anonim kullanıcı için sepete ekleme yerine
       // giriş gerekliliği gösterilir (hesap olmadan sepet yok) ve bağlantı bu sayfaya döner.
-      await expect(main).toContainText("Sipariş verme ve ödeme henüz açık değil");
+      await expect(main).toContainText("Sipariş verirken ödeme alınmaz");
       await expect(page.getByRole("button", { name: /satın al|ödeme yap|sepete ekle/i })).toHaveCount(0);
       await expect(page.getByTestId("signin-required")).toBeVisible();
       await expect(page.getByTestId("signin-required").getByRole("link", { name: "Giriş yap" })).toHaveAttribute("href", `/giris?next=${encodeURIComponent(`/urun/${detail.slug}`)}`);

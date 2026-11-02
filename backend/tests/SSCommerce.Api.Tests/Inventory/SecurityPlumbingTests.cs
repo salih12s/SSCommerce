@@ -20,6 +20,9 @@ public class SecurityPlumbingTests
     [InlineData("/api/v1/addresses")]
     [InlineData("/api/v1/addresses/abc")]
     [InlineData("/api/v1/checkout/preview")]
+    [InlineData("/api/v1/orders")]
+    [InlineData("/api/v1/orders/5/cancel")]
+    [InlineData("/api/v1/admin/orders")]
     [InlineData("/api/v1/auth/csrf")]
     [InlineData("/api/v1/admin/me")]
     public async Task Per_user_prefixes_are_served_with_Cache_Control_no_store_even_when_the_endpoint_does_not_exist_yet(string path)
@@ -36,6 +39,7 @@ public class SecurityPlumbingTests
     [InlineData("/api/v1/cartoon")]       // segment sınırı: /cart ile başlayan ama farklı kaynak
     [InlineData("/api/v1/addressbook")]
     [InlineData("/api/v1/checkouts")]
+    [InlineData("/api/v1/ordersx")]
     public async Task Look_alike_paths_are_not_swept_into_no_store(string path)
     {
         await using var factory = ApiFactory.Create("Development", postgresConnectionString: null);
