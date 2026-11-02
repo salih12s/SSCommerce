@@ -99,9 +99,11 @@ Web, `/api/backend/*` isteklerini `API_BASE_URL` adresine (varsayılan `http://l
 
 Mağaza, kategori, arama (fiyat/kategori/sıralama/sayfalama) ve `/urun/{slug}` gerçek katalog API'sine bağlıdır. `/kayit`, `/giris`, `/hesabim` aynı origin'de cookie + CSRF ile çalışır. Sekiz kategori görseli korunur; demo seed'deki dört kategori kullanılabilir, diğer kartlar Yakında'dır. API kapalıyken ürün fixture'ına dönülmez. Hesap yanıtları `no-store`; şifre/token localStorage'a yazılmaz. E-posta doğrulama henüz sunulmaz.
 
-Sepet, teslimat adresleri (`/hesabim/adresler`) ve teslimat özeti (`/checkout`) giriş gerektirir ve gerçek API'ye bağlıdır. Sepet stok ayırmaz; tutarları sunucu güncel fiyattan hesaplar. Sipariş verme ve ödeme yoktur: `/checkout` kargo hesaplanmadığı için ödenecek toplam göstermez.
+Sepet, teslimat adresleri (`/hesabim/adresler`) ve teslimat özeti (`/checkout`) giriş gerektirir ve gerçek API'ye bağlıdır. Sepet stok ayırmaz; tutarları sunucu güncel fiyattan hesaplar. `/checkout` kargo hesaplanmadığı için ödenecek toplam göstermez.
 
-Demo katalog için stok seed edilmez (D-047), yani yeni kurulumda her ürün "Stokta yok" görünür ve sepete eklenemez. Stok yalnız Admin rolüyle `POST /api/v1/admin/inventory/receive` üzerinden girilir; varsayılan admin hesabı yoktur ve admin arayüzü Faz 8'dedir. Tarayıcıda stoklu akışı görmek için E2E ortamı kullanılır: sabit stok verisini `SSCommerce.E2eHost` kurar.
+Sipariş `/checkout` üzerinden verilir, `/siparisler` ve `/siparisler/{id}` sayfalarında izlenir. **Ödeme alınmaz:** sipariş ödenmemiş bir kayıttır, kargo ve genel toplam hesaplanmaz, stok sipariş anında düşer ve kendiliğinden geri dönmez. Müşteri yalnız `placed` durumundaki kendi siparişini iptal eder; stok özgün depoya döner.
+
+Demo katalog için stok seed edilmez (D-047), yani yeni kurulumda her ürün "Stokta yok" görünür ve sepete eklenemez, bu yüzden geliştirme ortamında sipariş verilemez. Stok yalnız Admin rolüyle `POST /api/v1/admin/inventory/receive` üzerinden girilir; varsayılan admin hesabı yoktur ve admin arayüzü Faz 8'dedir. Tarayıcıda stoklu akışı görmek için E2E ortamı kullanılır: sabit stok verisini `SSCommerce.E2eHost` kurar.
 
 ### Web giriş katmanı ve güvenilen proxy
 
@@ -113,6 +115,6 @@ Browser testleri `backend/tools/SSCommerce.E2eHost` ile sıfırdan `sscommerce_t
 
 ## Henüz yapılmayanlar
 
-- Ordering (7, ödemesiz), ERP/Admin (8), kalite ve deployment (9). Ayrıntı: [ROADMAP](docs/ROADMAP.md). Vitrindeki ürünler ve fiyatlar **demo verisidir**; satış ve ödeme yoktur.
+- ERP/Admin (8), kalite ve deployment (9). Ayrıntı: [ROADMAP](docs/ROADMAP.md). Vitrindeki ürünler ve fiyatlar **demo verisidir**; ödeme yoktur.
 - MVP dışı: gerçek ödeme entegrasyonu ve stok rezervasyonu.
 - Uzak CI: GitHub hesabının faturalandırma kilidi yüzünden çalışmıyor (BLOCKED_EXTERNAL); bütün kontroller yerelde koşuluyor.

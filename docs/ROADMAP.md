@@ -10,10 +10,10 @@ Tek satıcılı, fiziksel ürün satan, TRY ile çalışan teknoloji/yaşam tarz
 | 1 | Çalışan full-stack temel | ASP.NET Core 10 API, PostgreSQL + Docker Compose, Next.js iskeleti, CI | PASS (yerel); uzak CI BLOCKED_EXTERNAL |
 | 2 | Storefront tasarım temeli | Tasarım token'ları, bileşenler, responsive ana sayfa (demo verisiyle) | PASS; tasarım 2026-10-29 onaylandı, korundu |
 | 3 | Catalog | Product → ProductVariant/SKU, kategori, gerçek katalog API'si ve sayfaları; ilk EF Core migration | PASS (yerel), 2026-10-29; commit onayı bekliyor |
-| 4 | Identity / Security | ASP.NET Core Identity, cookie oturumu, CSRF, rol modeli (müşteri/depo/yönetici) | PASS (yerel), 2026-10-29; commit onayı bekliyor |
-| 5 | Inventory | Warehouse/InventoryBalance, atomik stok hareketleri, public stok görünürlüğü (stok **rezervasyonu yok**) | PASS (yerel), 2026-11-01; commit onayı bekliyor |
-| 6 | Cart / Checkout | Sepet, adres ve teslimat bilgisi, salt okunur önizleme; sipariş ve ödeme adımı yok | PASS (yerel), 2026-11-01; commit onayı bekliyor |
-| 7 | Ordering | Sipariş oluşturma, fiyat snapshot'ı, idempotency anahtarı, sipariş durumları. **Gerçek ödeme olmadan** | Planlandı |
+| 4 | Identity / Security | ASP.NET Core Identity, cookie oturumu, CSRF, rol modeli (müşteri/depo/yönetici) | PASS (yerel), 2026-10-29; `40f030b`, `feat/phase-3-4-complete` dalında |
+| 5 | Inventory | Warehouse/InventoryBalance, atomik stok hareketleri, public stok görünürlüğü (stok **rezervasyonu yok**) | PASS (yerel), 2026-11-01; `40f030b`, `feat/phase-3-4-complete` dalında |
+| 6 | Cart / Checkout | Sepet, adres ve teslimat bilgisi, salt okunur önizleme; sipariş ve ödeme adımı yok | PASS (yerel), 2026-11-01; `40f030b`, `feat/phase-3-4-complete` dalında |
+| 7 | Ordering | Sipariş oluşturma, fiyat snapshot'ı, idempotency anahtarı, sipariş durumları. **Gerçek ödeme olmadan** | PASS (yerel), 2026-11-02; `feat/phase-3-4-complete` dalında; uzak CI BLOCKED_EXTERNAL |
 | 8 | ERP / Admin | Aynı web uygulamasında `/admin`: katalog, stok ve sipariş yönetimi, ERP entegrasyon noktaları | Planlandı |
 | 9 | Kalite ve deployment | Uçtan uca test kapsamı, performans, gözlemlenebilirlik, yedekleme, yayın (TLS ters proxy) | Planlandı |
 
@@ -48,3 +48,10 @@ Tek satıcılı, fiziksel ürün satan, TRY ile çalışan teknoloji/yaşam tarz
 
 - **F5.1–F5.4:** Veri modeli, ekleyici migration, atomik stok işlemleri, admin API ve dürüst public stok. Sözleşme: `docs/CONTRACT_PHASES_5_6.md`.
 - **F6.1–F6.5:** Kullanıcı başına sepet, sepet API'si, teslimat adresleri, salt okunur checkout önizlemesi, `/sepet`, `/checkout`, `/hesabim/adresler`. Sipariş, ödeme ve rezervasyon yok; bunlar Faz 7 ve sonrası.
+
+## Faz 7 görevleri (`GOAL_PHASE_7_ORDERING_EN.md`)
+
+- **F7.1:** `AddOrdering` migration'ı: `orders`, `order_items`, `order_inventory_allocations`, `order_status_history`, değişmezlik trigger'ları. Sözleşme: `docs/CONTRACT_PHASE_7.md`.
+- **F7.2:** Tek transaction'da sipariş: idempotency, quote ile fiyat onayı, depolara dağıtım, stok düşümü, snapshot, sepet temizliği.
+- **F7.3:** Durum makinesi, müşteri ve Admin iptali, özgün depoya tek seferlik iade, minimal personel uçları.
+- **F7.4:** `/checkout` sipariş akışı, `/siparisler`, `/siparisler/[id]`. Ödeme, kargo tutarı, genel toplam ve otomatik stok serbest bırakma yok.

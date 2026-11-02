@@ -1,7 +1,7 @@
 # SSCommerce İlerleme Kaydı
 
 Tek kalıcı ilerleme kaynağı. Durumlar: `PASS` · `FAIL` · `NOT_VERIFIED` (çalıştırılamadı) · `BLOCKED_EXTERNAL` (dış etken) · `PENDING_APPROVAL` (kullanıcı izni) · `PENDING_REMOTE_CI`.
-Bunlardan yalnızca `PASS` başarıdır. Kanıtlar ilgili bölümde belirtilen 2026-10-28/29 tarihlerinde bu makinede gerçekten çalıştırılmıştır. "Ana ajan" olarak işaretlenenler, alt ajan teslimlerinden sonra ana ajanın kendi koşusudur. Güncel kabul: **2026-11-01 Faz 2–6 yerel PASS, `feat/phase-3-4-complete` dalında commit edildi**.
+Bunlardan yalnızca `PASS` başarıdır. Kanıtlar ilgili bölümde belirtilen 2026-10-28/29 tarihlerinde bu makinede gerçekten çalıştırılmıştır. "Ana ajan" olarak işaretlenenler, alt ajan teslimlerinden sonra ana ajanın kendi koşusudur. Güncel kabul: **2026-11-02 Faz 7 yerel PASS; kod commit'i `508458b`, belge commit'i ve push sonrası `feat/phase-3-4-complete` dalında (`main`'e birleştirilmedi)**.
 
 ## Özet
 
@@ -13,9 +13,10 @@ Bunlardan yalnızca `PASS` başarıdır. Kanıtlar ilgili bölümde belirtilen 2
 | 3 | **PASS (yerel)** | Gerçek API'ye bağlı ana sayfa/kategori/arama/filtre/sort/sayfalama/ürün detayı. F3.5: backend 539/0/0 + web 81/0 + build/lint/tsc 0 | `40f030b` | `main`'e birleştirme kararı |
 | 4 | **PASS (yerel)** | Kayıt/giriş/hesabım/çıkış, HttpOnly cookie + CSRF, 401/403, iki müşteri, replay reddi; bağımsız QA ve gerçek proxy rate limit PASS | `40f030b` | `main`'e birleştirme kararı |
 | 5 | **PASS (yerel)** | Atomik stok, idempotency, eşzamanlılık gerçek PostgreSQL'de; admin API; dürüst public stok. Bölüm: "Faz 5: Inventory" | `40f030b` | `main`'e birleştirme kararı |
-| 6 | **PASS (yerel)** | Sepet, adres, salt okunur önizleme, `/sepet`, `/checkout`, `/hesabim/adresler`. Bölüm: "Faz 5–6 nihai kabul" | `40f030b` | Faz 7 yeni talimat ister |
+| 6 | **PASS (yerel)** | Sepet, adres, salt okunur önizleme, `/sepet`, `/checkout`, `/hesabim/adresler`. Bölüm: "Faz 5–6 nihai kabul" | `40f030b` | `main`'e birleştirme kararı |
+| 7 | **PASS (yerel)** | Sipariş, idempotency, iptal, personel geçişleri, `/siparisler`. Bölüm: "Faz 7: Ordering" | Kod `508458b`; belgeler hemen sonraki commit; `feat/phase-3-4-complete` push edildi · uzak CI: BLOCKED_EXTERNAL | `main`'e birleştirme kararı; Faz 8 yeni talimat ister |
 
-**Yerel teknik durum: bütün kapılar PASS.** Son kanıtlar "Commit ve dev DB kurtarma" bölümünde. Uzak CI GitHub hesabının faturalandırma kilidi yüzünden çalışmıyor (BLOCKED_EXTERNAL); ayrıntı "Git durumu"nda.
+**Yerel teknik durum: bütün kapılar PASS.** Son kanıtlar "Faz 7: Ordering" bölümünde. Uzak CI GitHub hesabının faturalandırma kilidi yüzünden çalışmıyor (BLOCKED_EXTERNAL); ayrıntı "Git durumu"nda.
 
 ## Ortam
 
@@ -435,3 +436,62 @@ Test edilmeyen: `\password` ile elle rotasyon (betik kullanıldı), gerçek tele
 - Commit 1 kontrolleri: `git diff --cached --check` 0; yasaklı dosya 0; gerçek parola 0 dosyada; 38 desen eşleşmesi test sabiti.
 - **`40f030b`** `feat: complete storefront, catalog, identity, inventory and cart`.
 - Docs commit'i ve push bu bölüm yazıldıktan sonra yapıldı; sonuçları Git geçmişindedir. Uzak CI beklentisi: `BLOCKED_EXTERNAL`.
+
+## Faz 7: Ordering (2026-11-01/02, Claude Code · lider Opus 5.5, uzman Sonnet 5.5)
+
+**Durum: `LOCAL_COMPLETED` (yerel doğrulama tam), kullanıcı onayıyla `feat/phase-3-4-complete` dalına iki commit olarak push edildi.** Kod ve test: `508458b`; belgeler bir sonraki commit (hash `git log`'da). `main`'e birleştirme yok, Faz 8 başlamadı. Yerel doğrulama uzak doğrulama değildir: uzak CI `BLOCKED_EXTERNAL` (GitHub faturalandırma kilidi); ayrıca tanım yalnız `main` push'u ve PR ile tetikleniyor, bu dalda koşu yok. Aşağıdaki bütün test sayıları bu makinede, gerçek PostgreSQL 17 ile alındı. Sözleşme: `docs/CONTRACT_PHASE_7.md`, kararlar D-059–D-067.
+
+İlk oturum `backend-dev` çalışırken kapandı. Ajan sürdürülemedi (transcript başka oturumda). İkinci oturumun temel koşusu 1561/5/0 idi; 5 kalan test ısınma sorgusunu sayıyordu, ürün hatası değildi.
+
+Nihai koşu, kod sabitlendikten sonra ana ajan tarafından (gerçek PostgreSQL 17, tek kullanımlık sunucu):
+
+| Komut | Sonuç | Exit |
+|---|---|---|
+| `dotnet build backend/SSCommerce.slnx -c Release` | 0 uyarı, 0 hata | 0 |
+| `dotnet test backend/SSCommerce.slnx -c Release --no-build` | **1737 / 0 / 0**, 4 dk 59 sn | 0 |
+| `npm run lint` · `npm run typecheck` | temiz | 0 · 0 |
+| `npm run test:server` | 6 / 0 / 0 | 0 |
+| `npm run test:e2e` (build dahil, gerçek tarayıcı → Next → API → PostgreSQL) | **160 / 0 / 0**, yeniden deneme yok (main 133, mutating 5, ordering 22) | 0 |
+| `npm run test:proxy` | 400/400/400/429 | 0 |
+| `git diff --check` | temiz | 0 |
+| Kalan `sscommerce_test_%` veritabanı | 0 | — |
+
+`qa-reviewer`'ın ayrı koşuları: tam paket 1737/0/0, sipariş eşzamanlılık ve kurtarma filtresi 3 tur 25/25, E2E 160/0/0, proxy PASS.
+
+| Görev | Durum | Kanıt |
+|---|---|---|
+| F7.1 Şema | PASS | database-dev. `20261101193031_AddOrdering`; dört tablo, trigger'lar. Tek `DROP`, sözleşmenin izin verdiği CHECK değişikliği. `has-pending-model-changes` temiz |
+| F7.2 Sipariş | PASS | 24 paralel aynı anahtar: 1 Created, 23 replay, tek sipariş. 24 kullanıcı son birim: 1 başarı, 23 `insufficient_stock`, sepetleri yerinde. 20 kullanıcı 7 stok: 7/13. Üç noktada zorla hata: tam rollback, aynı anahtar sonra başarılı |
+| F7.3 İptal ve geçişler | PASS | İki paralel iptal tek geçiş, tek iade. İptal ve sevkiyat tek kazanan. Pasif depoya iade, `max_on_hand` aşımında atomik 409. Müşteri, Warehouse ve Admin için bütün geçişler HTTP üzerinden |
+| F7.4 Arayüz | PASS | `/checkout` sipariş akışı, `/siparisler`, `/siparisler/[id]`. Yanıt kaybında aynı anahtar, çift tıklamada tek POST, 390/768/1440, axe, klavye, PII HTML/RSC'de yok. Ana ajan 390 ve 1440 ekran görüntülerini inceledi |
+| Mutation (elle) | PASS | Advisory lock: 2 test kırıldı. Sepet `FOR UPDATE`: 2 test kırıldı, 1 yerine 6 sipariş (ana ajan kendisi tekrarladı). Bakiye `FOR UPDATE`: 5. `orders FOR UPDATE`: 4. Hepsi geri alındı |
+
+Migration ve dev DB:
+- Yedek: `%LOCALAPPDATA%\SSCommerce\backups\sscommerce-dev-before-phase7-20261102.dump` (49 564 bayt).
+- Prova: yedek tek kullanımlık sunucuya yüklendi, `AddOrdering` uygulandı, dolu tabloların md5 özeti aynı, idempotent script ikinci kez değişiklik yapmadı.
+- Dev DB'ye aynı SQL soketten uygulandı: 5 migration, katalog 10/4/19/8, 0 kullanıcı, 0 sipariş, md5 aynı, konteyner healthy.
+
+Bağımsız kapılar:
+- **security-auditor (PASS, statik):** kritik/yüksek/orta 0; 3 düşük/bilgi bulgusu D-067 ile kabul edildi.
+- **health-observer (PASS, canlı):** soğuk başlangıç 3 tekil başlangıçta 200, ilk çağrı 0,66–0,71 sn; 16 paralel süreçte 0 yanlış 503 (önce 11/16), ilk çağrı 1,8–2,7 sn. Kilit tutulurken 5,06 sn'de 503 `busy`, sayımlar aynı, sonra aynı anahtar 201. `docker stop`: live 200, ready 503, sipariş uçları 503 `service_unavailable`, hiç 201 yok, iç bilgi yok. API yeniden başlatılmadan kurtarma, aynı anahtarla tek sipariş, stok ile hareket farkı 0. Eksik migration: ready 503, migration adı sızmıyor. API logunda telefon, adres, e-posta, parola 0.
+- **qa-reviewer (PASS):** GOAL §7'de eksik madde yok; oturum geçersizleştirme kısmi (yalnız çıkış, siparişe özel rol değişimi testi yok). Orta bulgu (`orders.spec.ts` iki sonucu birden kabul ediyordu) düzeltildi, test artık gerçek 401 metnini ister. Eski belge satırları düzeltildi. Sepet mutasyonu kaydı ana ajanca yenilendi.
+
+Kalan güvenlik ve üretim riskleri (D-061, D-067):
+- **Açık sipariş sınırı yok (D-067):** tek hesap sepet doldur, sipariş ver, iptal et döngüsüyle stok tutabilir ve silinemeyen kayıt üretebilir; rate limit hızı sınırlar, toplamı sınırlamaz. Canlı satıştan önce sınır kararı şart.
+- Sipariş stoğu ödemesiz tutar ve otomatik serbest bırakma yoktur (D-061); iptal yalnız elle.
+- `orders` trigger'ı durum geçişini doğrulamaz; doğrudan SQL `cancelled` satırı yeniden açabilir (D-067). Kargo ve genel toplam yok (`null`).
+- İdempotentlik kapsamı: sipariş verme (kullanıcı başına `Idempotency-Key`) ve iptal (tekrar iptal tek iade, `order-cancel-<allocationId>` benzersiz anahtarı) kanıtlı. Sipariş oluşturma, stok düşümü ve geçmiş kaydı tek transaction'dadır; üç noktada zorla hatada tam rollback testlidir.
+- Soğuk başlangıç: `ReadinessWarmUp` yanlış 503'ü giderdi, ancak 16 süreçli eşzamanlı soğuk başlangıçta ilk çağrı 2,7 sn ile 3 sn sınırına yakın; çok yoğun makinede pay azdır. Isınma 15 sn süre aşımı yolu zamana bağlı test edilmedi.
+- Gerçek TLS (`Secure`/`__Host-` cookie) ve gerçek cihaz doğrulanmadı (aşağıda).
+
+Test edilmeyenler ve sınırlar:
+- Gerçek telefon: `NOT_VERIFIED`. Gerçek TLS proxy üzerinden `Secure`/`__Host-` cookie: `NOT_VERIFIED` (Faz 9).
+- Yük, stres, soak testi yok. 16 süreçli soğuk başlangıçta ilk çağrı 2,7 sn: 3 sn sınırına yakın, çok yoğun makinede pay az.
+- 429 arayüzü yalnız route taklidiyle denendi; gerçek limit backend testlerinde ve `test:proxy`'de kanıtlı.
+- health-observer proxy üzerinden yazmayı ölçemedi (rewrite hedefi build'de sabit); bu yol Playwright E2E'de kanıtlı. Oturumlu hata ekranı canlı kesintide değil, E2E route taklidiyle kanıtlı.
+- Isınmanın 15 sn süre aşımı yolu zamana bağlı test edilmedi; hata yutma yolu test edildi.
+- `FixtureControl.cs` için ayrı test yok, E2E'de kullanılıyor.
+- `cart-hardening.spec.ts`'deki iki `waitForTimeout` Faz 6'dan kalma, değiştirilmedi.
+- Dev ortamında stok ve admin yok: orada sipariş verilemez, uçtan uca akış E2E ortamında kanıtlıdır (GOAL §6).
+
+Git: başlangıç HEAD `a689910`. Commit 1 `508458b` (95 dosya, açık liste, `git add -A` yok): kod + test + migration. Commit 2: `CLAUDE.md`, `README.md`, `docs/*`, `GOAL_PHASE_7_ORDERING_EN.md`. Kök referans PNG hiçbir commit'e girmedi. Stage öncesi sır taraması temiz (yalnız sızıntı testlerinde sahte `hunter2` değerleri).

@@ -2,7 +2,7 @@
 
 E-ticaret uygulaması (tek satıcı, fiziksel ürün, TRY, ilk sürümde gerçek ödeme yok).
 Yığın: **ASP.NET Core 10 + EF Core 10 + PostgreSQL** (`backend/`), **Next.js App Router + TypeScript + Tailwind** (`apps/web/`).
-Son hedef: `GOAL_PHASES_5_6_MULTI_AGENT_EN.md` (Faz 5 Inventory + Faz 6 Cart, tamamlandı). Önceki hedefler: `GOAL_PHASES_3_4.md`, `GOAL_PHASES_0_2.md`. Faz 7 yeni talimat ister. İlerleme: `docs/PROGRESS.md` (tek kaynak). Kararlar: `docs/DECISIONS.md`. Mimari: `docs/ARCHITECTURE.md`.
+Son hedef: `GOAL_PHASE_7_ORDERING_EN.md` (Faz 7 Ordering). Önceki hedefler: `GOAL_PHASES_5_6_MULTI_AGENT_EN.md`, `GOAL_PHASES_3_4.md`, `GOAL_PHASES_0_2.md`. Faz 8 yeni talimat ister. İlerleme: `docs/PROGRESS.md` (tek kaynak). Kararlar: `docs/DECISIONS.md`. Mimari: `docs/ARCHITECTURE.md`.
 Kurallar: para API'de kuruş (`long`), domain'de `decimal`, DB'de `numeric(18,2)`; zaman UTC. İş mantığı yalnızca backend'de.
 
 ## Roller

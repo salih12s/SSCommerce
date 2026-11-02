@@ -51,25 +51,34 @@ Bir istek şu yoldan geçer: `GET /api/v1/products?...` → `Api/Catalog/Catalog
 - Tablolar: `carts` (kullanıcı başına tek), `cart_items` (sepet + varyant unique, adet 1..20), `customer_addresses` (kullanıcı başına tek varsayılan, partial unique index).
 - Kod `Domain/Cart`, `Domain/Customers`, `Application/{Carts,Addresses,Checkout}`, `Infrastructure/{Carts,Addresses,Checkout}`, `Api/{Carts,Addresses,Checkout}`. Tutarlar `CartCalculator` ile her okumada güncel fiyattan hesaplanır; `unit_price_at_add` yalnız "fiyat değişti" bilgisidir.
 - Sepet yazmaları `carts` satır kilidiyle, adres yazmaları iki argümanlı advisory lock ile kullanıcı başına sıraya girer. Kullanıcı kimliği yalnız oturumdan gelir; başkasının kaynağı 404.
-- `POST /checkout/preview` iş açısından salt okunurdur; kargo hesaplanmadığı için `grandTotalMinor` `null` döner, sipariş ve ödeme oluşturmaz.
+- `POST /checkout/preview` iş açısından salt okunurdur; kargo hesaplanmadığı için `grandTotalMinor` `null` döner, sipariş ve ödeme oluşturmaz. Faz 7'den beri devam edilebilir özetlerde `quote` döndürür.
 - `DatabaseUnavailableMiddleware` bağlantı düzeyindeki DB hatalarını 503 `service_unavailable` yapar. `/health/ready` bekleyen migration'ı da denetler.
+
+### Faz 7 Ordering (D-059–D-067)
+- Tablolar: `orders`, `order_items`, `order_inventory_allocations`, `order_status_history`. Teslimat adresi, fiyat, ad ve SKU sipariş satırlarında kopyadır; adrese FK yoktur. Trigger'lar kalemleri, dağıtımları ve geçmişi yalnız eklenir yapar; `orders` satırında yalnız `status` ve `updated_at` değişir, satır silinemez.
+- Kod `Domain/Ordering`, `Application/Orders`, `Infrastructure/Orders`, `Api/Orders`. Sözleşme ve kilit sırası `docs/CONTRACT_PHASE_7.md`'de sabittir: `(kullanıcı, anahtar)` advisory lock → anahtar kontrolü → sepet `FOR UPDATE` → adres → satırlar `FOR SHARE` → quote → bakiyeler `(varyant, depo kodu)` sırasıyla `FOR UPDATE` → koşullu `UPDATE` → snapshot, hareket, geçmiş → sepet temizliği → commit.
+- Durum geçişleri `OrderStateMachine`'dedir ve tek kaynaktır. İptal `orders` satır kilidiyle sıraya girer; iade özgün depoya gider ve `order-cancel-<allocationId>` anahtarının unique indeksi çift iadeyi veritabanında engeller. `order-` öneki admin stok anahtarlarına kapalıdır.
+- Stok sipariş commit'inde düşer, ödeme alınmaz, otomatik serbest bırakma yoktur (D-061). `shippingMinor` ve `grandTotalMinor` `null`'dır.
+- Personel uçları `/api/v1/admin/orders` ayrı grupta `WarehouseOrAdmin` ister; iptal Admin gerektirir. Personel yanıtlarında müşteri verisi yoktur.
+- `ReadinessWarmUp` dinlemeye başlamadan önce çalışır, `postgres` kontrolü EF'siz ham Npgsql kullanır (D-065).
 
 ## Veri kuralları
 - Para: domain'de C# `decimal`, veritabanında `numeric(18,2)`. API'de **kuruş cinsinden tam sayı** (`priceMinor: 129900` = 1.299,00 TL).
 - Zaman: kalıcı veride UTC (`timestamptz`).
-- Gelecek model: Product → ProductVariant/SKU (Faz 3 Catalog) → Warehouse/InventoryBalance (Faz 5 Inventory); siparişte fiyat snapshot'ı ve idempotency anahtarı (Faz 7 Ordering). Catalog Faz 3'te, Inventory Faz 5'te oluşturuldu; Ordering henüz yok. Stok rezervasyonu MVP dışıdır.
+- Gelecek model: Product → ProductVariant/SKU (Faz 3 Catalog) → Warehouse/InventoryBalance (Faz 5 Inventory); siparişte fiyat snapshot'ı ve idempotency anahtarı (Faz 7 Ordering). Catalog Faz 3'te, Inventory Faz 5'te, Ordering Faz 7'de oluşturuldu. Stok rezervasyonu MVP dışıdır.
 
 ## Frontend (`apps/web`)
 - Next.js App Router + React + TypeScript + Tailwind CSS. Tek web uygulaması; `/admin` aynı uygulamada açılır (Faz 8).
 - `src/lib/catalog.ts` kategori/ürün DTO'larını API'den `no-store` ile okur. Server Component'lar fiyat ve filtre kurallarını backend'e bırakır. `demo-catalog.ts` artık yalnız görsel sunum, hero/banner ve sekiz kategori kartı için kullanılır; ürün fixture'ları API hatasında yedek kaynak değildir.
-- `src/components/`: Header, SearchForm, CategoryNav, MobileNav (client), BottomNav (yalnız mobil alt gezinti), SoonItem (pasif "Yakında" öğesi: hesap ve sepet), Icons, Hero, CategoryCard, ProductCard, CollectionSection, TrustSection, Footer, art (çizimler). Token'lar `globals.css` içindeki `@theme` bloğunda.
+- `src/components/`: Header, SearchForm, CategoryNav, MobileNav (client), BottomNav (yalnız mobil alt gezinti), SoonItem (pasif "Yakında" öğesi: favoriler), Icons, Hero, CategoryCard, ProductCard, CollectionSection, TrustSection, Footer, art (çizimler). Token'lar `globals.css` içindeki `@theme` bloğunda.
 - Bileşenler (D-025 sonrası): Header, SearchForm, CategoryNav, MobileNav, BottomNav, SoonItem, Icons, Logo, Hero, ServiceStrip, CategoryCard, Banners, ProductTabs, ProductCard, Footer. `art.tsx`, TrustSection ve CollectionSection kaldırıldı.
 - Görseller: `public/images/{hero,promo,banner,kategori,urun}/*.webp` (26 Unsplash fotoğrafı, 592 KB), `next/image` ile yerelde; çalışma anında dış istek yok. Kayıt `src/content/image-credits.ts` + `public/images/CREDITS.md`, liste `/gorsel-kaynaklari`'nda (D-025). Test, her kayıtlı dosyanın diskte olduğunu ve sayfadaki her `/images/` yolunun kayıtlı olduğunu denetler.
-- Rotalar: `/`, `/kategori/[slug]`, `/arama?q=&category=&minPrice=&maxPrice=&sort=&page=&pageSize=`, `/urun/[slug]`, `/giris`, `/kayit`, `/hesabim`, `/hesabim/adresler`, `/sepet`, `/checkout`, `/status`, `/gorsel-kaynaklari`. `src/proxy.ts` kategori ve ürün yokluğunu gerçek API'den stream öncesi kontrol eder ve HTTP 404 üretir. API erişilemezse sayfa hata durumu gösterir.
+- Rotalar: `/`, `/kategori/[slug]`, `/arama?q=&category=&minPrice=&maxPrice=&sort=&page=&pageSize=`, `/urun/[slug]`, `/giris`, `/kayit`, `/hesabim`, `/hesabim/adresler`, `/sepet`, `/checkout`, `/siparisler`, `/siparisler/[id]`, `/status`, `/gorsel-kaynaklari`. `src/proxy.ts` kategori ve ürün yokluğunu gerçek API'den stream öncesi kontrol eder ve HTTP 404 üretir. API erişilemezse sayfa hata durumu gösterir.
 - `AuthForm` + `AccountPanel` → `auth-client.ts` → same-origin rewrite → Identity. Her mutasyondan önce yeni CSRF token'ı alınır; HttpOnly auth cookie'sini JS okumaz. Hesap verisi yalnız browser'da `no-store` `/me` ile alınır; HTML/RSC içine kişisel bilgi gömülmez. Kayıt butonu hydration tamamlanana kadar devre dışıdır.
 - Node `server.mjs`, Next'ten önce socket peer IP'sinden forwarding başlıklarını üretir. `WEB_TRUSTED_PROXIES` varsayılan boş; exact-IP zinciri yalnız yetkili ingress'ten işlenir. API mevcut `KnownProxies` + `ForwardLimit=1` ile bu doğrulanmış tek istemci IP'sini kullanır. Next routing/rewrite aynı kalır; standalone output yoktur (D-042).
 - `lib/cart.ts` istemci sepet deposudur: nesil sayacı eski kimliğin ve eski GET'in yanıtını yok sayar, ağ/5xx hatasında sepeti yeniden okur. `lib/api.ts` her yazmadan önce taze CSRF token'ı alır. Tutar hesaplanmaz, API'nin kuruş değerleri gösterilir. `lib/safe-next.ts` açık yönlendirmeyi engeller. `server/privacy.mjs` özel rotalara `private, no-store` ekler.
-- UI testleri: Playwright + axe, 1440/768/390. `main` projesi paralel, fiyat/stok değiştiren `mutating` projesi ondan sonra tek dosyada seri koşar.
+- `lib/orders.ts` sipariş uçlarını, `lib/order-key.ts` Idempotency-Key niyetini yönetir: anahtar `sessionStorage`'da kullanıcı + adres + quote'a bağlıdır, istekten önce "sonuç bilinmiyor" olarak işaretlenir. Sonuç bilinmeyen durumda yeni anahtar üreten yol kapanır, tek seçenek aynı anahtarla yeniden göndermektir (D-066). Sipariş sayfaları tarayıcıda okunur; kişisel veri HTML/RSC'ye girmez.
+- UI testleri: Playwright + axe, 1440/768/390. `main` projesi paralel, fiyat/stok değiştiren `mutating` projesi ondan sonra, stok tüketen `ordering` projesi en son, ikisi de tek dosyada seri koşar.
 
 ## Güvenlik sınırları
 - Sırlar yalnızca ortam değişkenlerinde (`.env`, Git dışı). Repoda yalnızca `.env.example` bulunur.
