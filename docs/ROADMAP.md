@@ -14,7 +14,7 @@ Tek satıcılı, fiziksel ürün satan, TRY ile çalışan teknoloji/yaşam tarz
 | 5 | Inventory | Warehouse/InventoryBalance, atomik stok hareketleri, public stok görünürlüğü (stok **rezervasyonu yok**) | PASS (yerel), 2026-11-01; `40f030b`, `feat/phase-3-4-complete` dalında |
 | 6 | Cart / Checkout | Sepet, adres ve teslimat bilgisi, salt okunur önizleme; sipariş ve ödeme adımı yok | PASS (yerel), 2026-11-01; `40f030b`, `feat/phase-3-4-complete` dalında |
 | 7 | Ordering | Sipariş oluşturma, fiyat snapshot'ı, idempotency anahtarı, sipariş durumları. **Gerçek ödeme olmadan** | PASS (yerel), 2026-11-02; `feat/phase-3-4-complete` dalında; uzak CI BLOCKED_EXTERNAL |
-| 8 | ERP / Admin | Aynı web uygulamasında `/admin`: katalog, stok ve sipariş yönetimi, ERP entegrasyon noktaları | VERIFIED (yerel), 2026-11-07; commit yok; dev veritabanı migration onayı bekliyor; uzak CI BLOCKED_EXTERNAL |
+| 8 | ERP / Admin | Aynı web uygulamasında `/admin`: katalog, stok ve sipariş yönetimi, ERP entegrasyon noktaları | VERIFIED, 2026-11-07; dev veritabanına AddAdminOperations uygulandı; `c8bba63` push edildi; main birleştirmesi onay bekliyor; uzak CI BLOCKED_EXTERNAL |
 | 9 | Kalite ve deployment | Uçtan uca test kapsamı, performans, gözlemlenebilirlik, yedekleme, yayın (TLS ters proxy) | Planlandı |
 
 ### MVP dışı (sonraki sürümler)

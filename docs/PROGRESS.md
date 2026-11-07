@@ -15,7 +15,7 @@ Bunlardan yalnızca `PASS` başarıdır. Kanıtlar ilgili bölümde belirtilen 2
 | 5 | **PASS (yerel)** | Atomik stok, idempotency, eşzamanlılık gerçek PostgreSQL'de; admin API; dürüst public stok. Bölüm: "Faz 5: Inventory" | `40f030b` | `main`'e birleştirme kararı |
 | 6 | **PASS (yerel)** | Sepet, adres, salt okunur önizleme, `/sepet`, `/checkout`, `/hesabim/adresler`. Bölüm: "Faz 5–6 nihai kabul" | `40f030b` | `main`'e birleştirme kararı |
 | 7 | **PASS (yerel)** | Sipariş, idempotency, iptal, personel geçişleri, `/siparisler`. Bölüm: "Faz 7: Ordering" | Kod `508458b`; belgeler hemen sonraki commit; `feat/phase-3-4-complete` push edildi · uzak CI: BLOCKED_EXTERNAL | `main`'e birleştirme kararı; Faz 8 yeni talimat ister |
-| 8 | **VERIFIED (yerel) · PENDING_DEV_MIGRATION_APPROVAL** | Admin API + `/admin` (11 rota), rol/stok/katalog/sipariş yönetimi, F8.5 sınırları. Backend Release 2195/0/0, Playwright 210/0/0 (50 admin). Güvenlik/sağlık/QA: PASS_WITH_FINDINGS. Bölüm: "Faz 8: nihai doğrulama" | Commit/push yok; migration dev DB'ye uygulanmadı · uzak CI: BLOCKED_EXTERNAL | Dev migration onayı; sonra Git onayı |
+| 8 | **VERIFIED · dev DB migration uygulandı · push edildi (`c8bba63`)** | Admin API + `/admin` (11 rota), rol/stok/katalog/sipariş yönetimi, F8.5 sınırları. Backend Release 2195/0/0, Playwright 210/0/0 (50 admin). Güvenlik/sağlık/QA: PASS_WITH_FINDINGS. Bölüm: "Faz 8: nihai doğrulama" | Main birleştirmesi yapılmadı · uzak CI: BLOCKED_EXTERNAL | Main birleştirme onayı; D-071; üretim sipariş eşikleri; Faz 9 talimatı |
 
 **Yerel teknik durum: bütün kapılar PASS.** Son kanıtlar "Faz 7: Ordering" bölümünde. Uzak CI GitHub hesabının faturalandırma kilidi yüzünden çalışmıyor (BLOCKED_EXTERNAL); ayrıntı "Git durumu"nda.
 
@@ -584,3 +584,13 @@ Yeni admin testleri (47): access 12, responsive 6, catalog 9, stock 7, fulfilmen
 **Migration hazırlığı (dev DB'ye DOKUNULMADI):** `AddAdminOperations` yalnız ekleyici (Up'ta DROP yok; DROP'lar Down'da; üretilen idempotent betik 1241 satır, `DROP TABLE/COLUMN` 0; `has-pending-model-changes` "No changes"). Dev DB salt okunur durum: 5 migration (`…AddOrdering` sonuncu), ürün 10; taze yedek `%LOCALAPPDATA%\SSCommerce\backups\sscommerce-dev-before-phase8-apply-20261107-175903.dump` (73 849 bayt, 2 Kasım yedeğiyle aynı boyut: veri değişmemiş). Yedek tek kullanımlık sunucuya geri yüklendi (`pg_restore` exit 0, 5 kayıt), idempotent betik iki kez uygulandı (exit 0, 0), 6 migration kaydı, yeni tablo `admin_audit_log`, `products` 10 satır `version=1`; satır özeti yalnız yeni `version` sütunu eklenen 3 tabloda (`categories`, `products`, `product_variants`) ve `__EFMigrationsHistory`'de değişti, beklenen. Tek kullanımlık sunucu silindi.
 
 **Test ortamı durumu:** `sscommerce-test-pg` (5434) ve `sscommerce-postgres-1` (5433) çalışıyor; sağlık ajanının kendi konteyneri ve süreçleri kapatıldı.
+
+### Faz 8: dev migration ve push (2026-11-07)
+
+**Durum: `LOCAL_COMPLETED`, push edildi.** Sahip, migration'ın dev veritabanına uygulanmasını ve commit + push'u açıkça onayladı.
+
+- **Yedek:** `%LOCALAPPDATA%\SSCommerce\backups\sscommerce-dev-before-phase8-apply-final-20261107-200027.dump` (73 849 bayt, uygulamadan hemen önce, `pg_dump -Fc` soketten).
+- **Uygulama:** BOM'suz idempotent `dotnet ef migrations script --idempotent` çıktısı, `psql -v ON_ERROR_STOP=1` ile `sscommerce-postgres-1` soketinden; exit 0.
+- **Doğrulama (salt okunur, soket):** `__EFMigrationsHistory` 6 kayıt (son: `20261102073215_AddAdminOperations`); `admin_audit_log` ve tetikleyicileri (`no_update_delete`, `no_truncate`) ile 3 CHECK + FK var; seed değişmedi (ürün 10 hepsi `version=1`, kategori 4, varyant 19, görsel 8); kullanıcı 0, `admin_audit_log` 0 satır.
+- **Yapılmayan:** dev API'ye karşı uçtan uca duman testi. Dev parolası yalnız kök `.env`'de, Claude okuyamaz; sahibi `docker compose up` ile API'yi başlatıp `/health/ready` ve `--bootstrap-admin` ile ilk Admin'i deneyebilir.
+- **Git:** `c8bba63` (164 dosya) `origin/feat/phase-3-4-complete` dalına push edildi. Main'e birleştirme yok. Kök referans PNG stage edilmedi.
