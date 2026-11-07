@@ -137,6 +137,11 @@ export function CheckoutView() {
     if (result.status === 0) return setProblem({ title: "Sunucuya bağlanılamadı", text: "Sipariş gönderilmedi. Bağlantını kontrol edip tekrar dene; aynı sipariş denemesi kullanılır." });
     if (result.status === 401) return setProblem({ title: "Oturumun sona erdi", text: "Sipariş verilmedi. Giriş yaptıktan sonra bu sayfaya dönersin; sepetin ve adreslerin yerinde.", link: "login" });
     if (result.status === 403) return setProblem({ title: "Güvenlik doğrulaması geçersiz", text: "Oturumun ya da güvenlik belirtecin geçerli değil. Sipariş verilmedi; sayfayı yenileyip tekrar dene.", link: "reload" });
+    // Kullanıcı başına sipariş sınırı (sunucu kuralı): otomatik yeniden deneme yok, yeni anahtar üretilmez; aynı anahtar korunur ve kullanıcıya ne yapacağı söylenir.
+    if (result.status === 429 && result.code === "order_daily_limit") {
+      const limit = typeof result.extra.limit === "number" ? result.extra.limit : null;
+      return setProblem({ title: "Günlük sipariş sınırına ulaştın", text: `Sipariş verilmedi. Son 24 saatte ${limit ? `en çok ${limit} sipariş verebilirsin` : "verebileceğin sipariş sayısına ulaştın"}. ${result.retryAfter ? `Yaklaşık ${formatWait(result.retryAfter)} sonra yeniden deneyebilirsin.` : "Daha sonra yeniden dene."} Sepetin ve adreslerin yerinde.`, link: "siparisler" });
+    }
     if (result.status === 429) { const t = Date.now(); setNow(t); setWaitUntil(t + (result.retryAfter ?? 10) * 1000); return setProblem({ title: "Çok fazla istek", text: "Sipariş verilmedi. Kısa bir süre bekleyip tekrar dene." }); }
     switch (result.code) {
       case "order_quote_changed": reload(); return setProblem({ title: "Fiyatlar ya da sepet değişti", text: "Sipariş verilmedi. Güncel özeti incele ve siparişi yeniden onayla.", details: [], diff: true });
@@ -145,6 +150,10 @@ export function CheckoutView() {
       case "cart_empty": setPreview({ kind: "empty" }); return setProblem({ title: "Sepetin boş, sipariş oluşmadı", text: "Bu deneme için bir sipariş bulunamadı. Başka bir sekmede sipariş verdiysen Siparişlerim'de görünür.", link: "siparisler" });
       case "address_not_found": void refresh(); reload(); return setProblem({ title: "Teslimat adresi bulunamadı", text: "Sipariş verilmedi. Adres listesi yenilendi; bir adres seçip tekrar dene." });
       case "idempotency_key_reused": clearIntent(); reload(); return setProblem({ title: "Sipariş denemesi yenilendi", text: "Bu deneme başka bir içerikle kullanılmıştı. Sipariş verilmedi; özet yenilendi, siparişi yeniden onayla." });
+      case "open_order_limit": {
+        const limit = typeof result.extra.limit === "number" ? result.extra.limit : null;
+        return setProblem({ title: "Açık sipariş sınırına ulaştın", text: `Sipariş verilmedi. ${limit ? `Aynı anda en çok ${limit} ödenmemiş açık siparişin olabilir.` : "Aynı anda açık tutabileceğin sipariş sayısına ulaştın."} Siparişlerim sayfasında birini iptal et ya da hazırlanmasını bekle, sonra tekrar dene. Sepetin yerinde.`, link: "siparisler" });
+      }
       case "cart_total_too_large": return setProblem({ title: "Sepet toplamı çok yüksek", text: "Sipariş verilmedi. Sepetteki ürünleri azaltıp tekrar dene.", link: "sepet" });
       case "busy": return setProblem({ title: "Sistem şu an meşgul", text: "Sipariş verilmedi. Birkaç saniye sonra tekrar dene; aynı sipariş denemesi kullanılır." });
       default: return setProblem({ title: "Sipariş verilemedi", text: result.message });
@@ -205,6 +214,13 @@ export function CheckoutView() {
       <p id="siparis-not" className="mt-3 text-sm text-fg-muted" data-testid="order-note">Ödeme alınmaz: sipariş ödenmemiş bir kayıt olarak oluşur, kargo ücreti sonra belirlenir. Sepet stok ayırmaz; stok yalnızca sipariş verdiğin anda düşer. Fiyat ya da stok değişirse sipariş verilmeden önce uyarılırsın.</p>
     </aside>
   </div>);
+}
+
+/** Retry-After saniyesini okunur süreye çevirir ("12 dakika", "3 saat"); tahmindir, sunucu saatine göre yuvarlanır. */
+function formatWait(seconds: number): string {
+  if (seconds < 90) return `${seconds} saniye`;
+  if (seconds < 5400) return `${Math.ceil(seconds / 60)} dakika`;
+  return `${Math.ceil(seconds / 3600)} saat`;
 }
 
 function ProblemBox({ problem }: { problem: Problem }) {

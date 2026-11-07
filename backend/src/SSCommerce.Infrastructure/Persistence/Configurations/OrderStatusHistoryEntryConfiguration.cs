@@ -52,6 +52,8 @@ internal sealed class OrderStatusHistoryEntryConfiguration : IEntityTypeConfigur
         // order_id önde olduğu için order FK'si ayrıca indekslenmez; sipariş detayı geçmişi bu sırayla okur.
         builder.HasIndex(h => new { h.OrderId, h.OccurredAt, h.Id }).HasDatabaseName("ix_order_status_history_order_id_occurred_at_id");
         builder.HasIndex(h => h.ActorUserId).HasDatabaseName("ix_order_status_history_actor_user_id");
+        // Faz 8 panosu: son sipariş olayları (en yeni önce, LIMIT).
+        builder.HasIndex(h => new { h.OccurredAt, h.Id }).IsDescending(true, true).HasDatabaseName("ix_order_status_history_occurred_at_id");
 
         builder.HasOne<Order>()
             .WithMany()

@@ -10,6 +10,7 @@ using Npgsql;
 using SSCommerce.Domain.Catalog;
 using SSCommerce.Domain.Inventory;
 using SSCommerce.Domain.Ordering;
+using SSCommerce.Infrastructure.Identity;
 
 namespace SSCommerce.E2eHost;
 
@@ -74,11 +75,12 @@ internal static partial class FixtureControl
         }
     }
 
-    public static WebApplication StartControlServer(string connectionString)
+    /// <param name="url">Yalnız testler için: varsayılan <see cref="Url"/> (sabit 5082). Test, çakışmasın diye <c>http://127.0.0.1:0</c> verip gerçek adresi <c>app.Urls</c>'tan okur.</param>
+    public static WebApplication StartControlServer(string connectionString, string url = Url)
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
-        builder.WebHost.UseUrls(Url);
+        builder.WebHost.UseUrls(url);
         var app = builder.Build();
 
         // Savunma derinliği: yalnız loopback istemciler. (Kestrel zaten 127.0.0.1'e bağlıdır.)
@@ -190,6 +192,58 @@ internal static partial class FixtureControl
             return Results.NoContent();
         }));
 
+        // Personel rolü ataması (Faz 8 E2E): HTTP'de personel rolü verme yolu yoktur (kayıt hep Customer); Playwright, kayıtlı bir hesaba Admin/Warehouse
+        // rolünü bu loopback ucundan verir. YALNIZ tam eşleşen "Admin" ya da "Warehouse" (başka rol reddedilir). Üretim API'sinde böyle bir uç YOKTUR.
+        // Güvenlik damgası yenilenir: hesabın eski cookie'si düşer, kullanıcı yeniden giriş yapar (gerçek rol API'siyle aynı davranış). E-posta yazdırılmaz.
+        app.MapPost("/fixture/role", (RoleRequest request) => RunAsync(connectionString, async connection =>
+        {
+            var roleId = request.Role switch
+            {
+                "Admin" => AppRoles.AdminId,
+                "Warehouse" => AppRoles.WarehouseId,
+                _ => Guid.Empty,
+            };
+            if (roleId == Guid.Empty || string.IsNullOrWhiteSpace(request.Email) || request.Email.Length > 254)
+            {
+                return Results.BadRequest();
+            }
+
+            await using var transaction = await connection.BeginTransactionAsync();
+            Guid? userId;
+            await using (var find = new NpgsqlCommand("SELECT \"Id\" FROM \"AspNetUsers\" WHERE \"NormalizedEmail\" = @email", connection, transaction))
+            {
+                find.Parameters.AddWithValue("email", request.Email.Trim().ToUpperInvariant());
+                userId = await find.ExecuteScalarAsync() as Guid?;
+            }
+
+            if (userId is null)
+            {
+                return Results.NotFound();
+            }
+
+            await using (var grant = new NpgsqlCommand(
+                "INSERT INTO \"AspNetUserRoles\" (\"UserId\", \"RoleId\") VALUES (@user, @role) ON CONFLICT DO NOTHING",
+                connection,
+                transaction))
+            {
+                grant.Parameters.AddWithValue("user", userId.Value);
+                grant.Parameters.AddWithValue("role", roleId);
+                await grant.ExecuteNonQueryAsync();
+            }
+
+            await using (var stamp = new NpgsqlCommand(
+                "UPDATE \"AspNetUsers\" SET \"SecurityStamp\" = gen_random_uuid()::text, \"ConcurrencyStamp\" = gen_random_uuid()::text WHERE \"Id\" = @user",
+                connection,
+                transaction))
+            {
+                stamp.Parameters.AddWithValue("user", userId.Value);
+                await stamp.ExecuteNonQueryAsync();
+            }
+
+            await transaction.CommitAsync();
+            return Results.NoContent();
+        }));
+
         app.Start();
         return app;
     }
@@ -238,4 +292,6 @@ internal static partial class FixtureControl
     private sealed record ActiveRequest(string? Sku, bool? IsActive);
 
     private sealed record OrderStatusRequest(Guid? OrderId, string? Status);
+
+    private sealed record RoleRequest(string? Email, string? Role);
 }

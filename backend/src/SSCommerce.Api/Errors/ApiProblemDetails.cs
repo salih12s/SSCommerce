@@ -46,6 +46,21 @@ public static class ApiErrorCodes
     public const string OrderQuoteChanged = "order_quote_changed";
     public const string OrderTransitionInvalid = "order_transition_invalid";
 
+    // Faz 8 (yönetim, docs/CONTRACT_PHASE_8.md "Errors").
+    public const string UserNotFound = "user_not_found";
+    public const string VersionConflict = "version_conflict";
+    public const string CategorySlugTaken = "category_slug_taken";
+    public const string ProductSlugTaken = "product_slug_taken";
+    public const string SkuTaken = "sku_taken";
+    public const string VariantOptionsTaken = "variant_options_taken";
+    public const string CategoryCycle = "category_cycle";
+    public const string CategoryTooDeep = "category_too_deep";
+    public const string ImageNotApproved = "image_not_approved";
+    public const string OpenOrderLimit = "open_order_limit";
+    public const string OrderDailyLimit = "order_daily_limit";
+    public const string RoleSelfDemotion = "role_self_demotion";
+    public const string LastAdmin = "last_admin";
+
     /// <summary>Kullanıcı başına kilit zaman aşımı (sepet/adres yazması): hiçbir şey yazılmadı, tekrar denenebilir.</summary>
     public const string Busy = "busy";
 

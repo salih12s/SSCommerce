@@ -13,6 +13,7 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
             t.HasCheckConstraint("ck_products_slug_format", $"slug ~ '{CatalogRules.SlugPattern}'");
             t.HasCheckConstraint("ck_products_name_not_blank", "btrim(name) <> ''");
             t.HasCheckConstraint("ck_products_brand_not_blank", "brand IS NULL OR btrim(brand) <> ''");
+            t.HasCheckConstraint("ck_products_version_positive", "version >= 1");
             t.HasCheckConstraint(
                 "ck_products_description_length",
                 $"description IS NULL OR char_length(description) <= {CatalogRules.DescriptionMaxLength}");
@@ -31,6 +32,7 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.Specifications).HasColumnName("specifications").AsJsonbDictionary();
         builder.Property(p => p.IsDemo).HasColumnName("is_demo").HasDefaultValue(false);
         builder.Property(p => p.IsActive).HasColumnName("is_active");
+        builder.Property(p => p.Version).HasColumnName("version").HasColumnType("integer").HasDefaultValue(1);
         builder.Property(p => p.CreatedAt).HasColumnName("created_at").HasColumnType("timestamptz");
         builder.Property(p => p.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamptz");
 

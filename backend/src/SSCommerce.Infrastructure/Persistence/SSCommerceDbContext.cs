@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using SSCommerce.Domain.Administration;
 using SSCommerce.Domain.Cart;
 using SSCommerce.Domain.Catalog;
 using SSCommerce.Domain.Customers;
@@ -46,6 +47,8 @@ public sealed class SSCommerceDbContext(DbContextOptions<SSCommerceDbContext> op
     public DbSet<OrderInventoryAllocation> OrderInventoryAllocations => Set<OrderInventoryAllocation>();
 
     public DbSet<OrderStatusHistoryEntry> OrderStatusHistory => Set<OrderStatusHistoryEntry>();
+
+    public DbSet<AdminAuditEntry> AdminAuditLog => Set<AdminAuditEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

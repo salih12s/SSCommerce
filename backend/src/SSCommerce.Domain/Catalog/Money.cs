@@ -15,6 +15,23 @@ public static class Money
     /// </summary>
     public const decimal MaxAmount = 90_071_992_547_409.91m;
 
+    /// <summary>Admin yazmalarında kabul edilen en büyük kuruş tutarı: 2^53 - 1 (JavaScript güvenli tam sayı sınırı).</summary>
+    public const long MaxMinor = 9_007_199_254_740_991L;
+
+    /// <summary>
+    /// Admin fiyat yazması (Faz 8): <c>priceMinor</c> 1..<see cref="MaxMinor"/>. Sıfır ve negatif reddedilir (var olan sıfır fiyatlar okunabilir kalır,
+    /// ama yeni yazma sıfır fiyat üretmez). Dönen değer TL (ölçek 2).
+    /// </summary>
+    public static decimal FromAdminPriceMinor(long minor)
+    {
+        if (minor < 1 || minor > MaxMinor)
+        {
+            throw new CatalogRuleException($"Fiyat (kuruş) 1 ile {MaxMinor} arasında olmalıdır.");
+        }
+
+        return FromMinor(minor);
+    }
+
     /// <summary>TL → kuruş. Örn. 42999.00m → 4299900. 1.234m (kuruştan küçük kesir) → hata. 1.500m kabul edilir (değer 2 basamağa sığıyor).</summary>
     public static long ToMinor(decimal amount)
     {

@@ -79,12 +79,13 @@ public class InventoryMigrationTests
         Assert.Equal(3, await TableCountAsync(database, InventoryTables));
         var history = (await database.ScalarAsync<string>(
             "SELECT string_agg(\"MigrationId\", ',' ORDER BY \"MigrationId\") FROM \"__EFMigrationsHistory\"", ct))!.Split(',');
-        Assert.Equal(5, history.Length);
+        Assert.Equal(6, history.Length);
         Assert.EndsWith("_InitialCatalog", history[0]);
         Assert.EndsWith("_AddIdentity", history[1]);
         Assert.EndsWith("_AddInventory", history[2]);
         Assert.EndsWith("_AddCartAndAddresses", history[3]);
         Assert.EndsWith("_AddOrdering", history[4]);
+        Assert.EndsWith("_AddAdminOperations", history[5]);
 
         Assert.Equal(2, await InventoryTriggerCountAsync(database));
         Assert.Equal(1, await FunctionCountAsync(database));
@@ -103,10 +104,7 @@ public class InventoryMigrationTests
         await MigrateToAsync(database, IdentityMigration);
         Assert.Equal(0, await TableCountAsync(database, InventoryTables));
 
-        await using (var context = database.CreateDbContext())
-        {
-            await new DemoCatalogSeeder(context).SeedAsync(ct);
-        }
+        await LegacySchemaSeed.SeedDemoCatalogAsync(database, ct);
 
         await InsertUserAsync(database);
         var before = await ExistingDataChecksumAsync(database);
@@ -117,7 +115,7 @@ public class InventoryMigrationTests
         await using (var context = database.CreateDbContext())
         {
             var pending = (await context.Database.GetPendingMigrationsAsync(ct)).ToArray();
-            Assert.Equal(3, pending.Length); // AddInventory, ardından Faz 6'nın AddCartAndAddresses'i ve Faz 7'nin AddOrdering'i
+            Assert.Equal(4, pending.Length); // AddInventory, ardından Faz 6'nın AddCartAndAddresses'i, Faz 7'nin AddOrdering'i ve Faz 8'in AddAdminOperations'ı
             Assert.EndsWith("_AddInventory", pending[0]);
         }
 
@@ -142,7 +140,7 @@ public class InventoryMigrationTests
             await context.Database.MigrateAsync(ct);
         }
 
-        Assert.Equal(5, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
+        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
         Assert.Equal(3, await TableCountAsync(database, InventoryTables));
         Assert.Equal(2, await InventoryTriggerCountAsync(database));
         Assert.Equal(checksum, await ExistingDataChecksumAsync(database));
@@ -153,10 +151,7 @@ public class InventoryMigrationTests
     {
         var ct = TestContext.Current.CancellationToken;
         await using var database = await PostgresTestDatabase.CreateAsync(migrate: true);
-        await using (var context = database.CreateDbContext())
-        {
-            await new DemoCatalogSeeder(context).SeedAsync(ct);
-        }
+        await LegacySchemaSeed.SeedDemoCatalogAsync(database, ct);
 
         await InsertUserAsync(database);
         var before = await ExistingDataChecksumAsync(database);
@@ -173,7 +168,7 @@ public class InventoryMigrationTests
         Assert.Equal(3, await TableCountAsync(database, InventoryTables));
         Assert.Equal(2, await InventoryTriggerCountAsync(database));
         Assert.Equal(1, await FunctionCountAsync(database));
-        Assert.Equal(5, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
+        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
         Assert.Equal(before, await ExistingDataChecksumAsync(database));
     }
 
@@ -197,7 +192,7 @@ public class InventoryMigrationTests
 
         Assert.Equal(3, await TableCountAsync(database, InventoryTables));
         Assert.Equal(2, await InventoryTriggerCountAsync(database));
-        Assert.Equal(5, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
+        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
         Assert.Equal(before, await ExistingDataChecksumAsync(database));
     }
 
@@ -237,7 +232,7 @@ public class InventoryMigrationTests
             """,
             ct);
         Assert.Equal(
-            "ix_inventory_balances_product_variant_id,ix_stock_movements_actor_user_id,ix_stock_movements_product_variant_id_occurred_at," +
+            "ix_inventory_balances_product_variant_id,ix_stock_movements_actor_user_id,ix_stock_movements_occurred_at_id,ix_stock_movements_product_variant_id_occurred_at," +
             "ix_stock_movements_warehouse_id_occurred_at,pk_inventory_balances,pk_stock_movements,pk_warehouses," +
             "ux_inventory_balances_warehouse_id_product_variant_id,ux_stock_movements_operation_key,ux_warehouses_code",
             indexes);

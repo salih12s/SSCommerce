@@ -21,6 +21,8 @@
     <ProjectReference Include="..\..\src\SSCommerce.Domain\SSCommerce.Domain.csproj" />
     <ProjectReference Include="..\..\src\SSCommerce.Application\SSCommerce.Application.csproj" />
     <ProjectReference Include="..\..\src\SSCommerce.Infrastructure\SSCommerce.Infrastructure.csproj" />
+    <!-- E2E fixture kontrol ucu (yalnız test): gerçek PostgreSQL'e karşı sınanır; üretim API'si bu projeye BAĞLI DEĞİLDİR. -->
+    <ProjectReference Include="..\..\tools\SSCommerce.E2eHost\SSCommerce.E2eHost.csproj" />
   </ItemGroup>
 
 </Project>

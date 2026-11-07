@@ -13,6 +13,7 @@ internal sealed class CategoryConfiguration : IEntityTypeConfiguration<Category>
             t.HasCheckConstraint("ck_categories_slug_format", $"slug ~ '{CatalogRules.SlugPattern}'");
             t.HasCheckConstraint("ck_categories_name_not_blank", "btrim(name) <> ''");
             t.HasCheckConstraint("ck_categories_parent_not_self", "parent_id IS NULL OR parent_id <> id");
+            t.HasCheckConstraint("ck_categories_version_positive", "version >= 1");
         });
 
         builder.HasKey(c => c.Id).HasName("pk_categories");
@@ -22,6 +23,8 @@ internal sealed class CategoryConfiguration : IEntityTypeConfiguration<Category>
         builder.Property(c => c.ParentId).HasColumnName("parent_id");
         builder.Property(c => c.SortOrder).HasColumnName("sort_order");
         builder.Property(c => c.IsActive).HasColumnName("is_active");
+        // Faz 8: yazma sürümü. Ham INSERT'ler sütunu vermez (DEFAULT 1). Eşzamanlılık belirteci değil: kilit + karşılaştırma (CONTRACT_PHASE_8).
+        builder.Property(c => c.Version).HasColumnName("version").HasColumnType("integer").HasDefaultValue(1);
         builder.Property(c => c.CreatedAt).HasColumnName("created_at").HasColumnType("timestamptz");
         builder.Property(c => c.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamptz");
 

@@ -96,6 +96,9 @@ public enum WarehouseWriteStatus
     Updated,
     NotFound,
     CodeTaken,
+
+    /// <summary>Kilit zaman aşımı ya da deadlock: hiçbir şey yazılmadı (503 busy).</summary>
+    Busy,
 }
 
 public sealed record WarehouseWriteResult(WarehouseWriteStatus Status, WarehouseDto? Warehouse);

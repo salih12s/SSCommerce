@@ -8,13 +8,17 @@ public interface IInventoryService
 {
     Task<StockOperationResult> ApplyStockOperationAsync(StockCommand command, CancellationToken cancellationToken);
 
-    /// <summary>Kod tekrarı <see cref="WarehouseWriteStatus.CodeTaken"/>; yarışta da veritabanı unique indeksi karar verir.</summary>
-    Task<WarehouseWriteResult> CreateWarehouseAsync(NewWarehouse warehouse, CancellationToken cancellationToken);
+    /// <summary>
+    /// Kod tekrarı <see cref="WarehouseWriteStatus.CodeTaken"/>; yarışta da veritabanı unique indeksi karar verir. Depo ve <c>warehouse.create</c> denetim
+    /// satırı AYNI transaction'da yazılır (Faz 8).
+    /// </summary>
+    Task<WarehouseWriteResult> CreateWarehouseAsync(Guid actorUserId, NewWarehouse warehouse, CancellationToken cancellationToken);
 
-    Task<WarehouseWriteResult> UpdateWarehouseAsync(Guid id, WarehouseChange change, CancellationToken cancellationToken);
+    /// <summary>Depo satırı kilitlenir; yalnız gerçekten değişen alan varsa <c>warehouse.update</c> denetim satırı yazılır (aynı transaction).</summary>
+    Task<WarehouseWriteResult> UpdateWarehouseAsync(Guid actorUserId, Guid id, WarehouseChange change, CancellationToken cancellationToken);
 }
 
-/// <summary>Stok OKUMA sözleşmesi (admin). AsNoTracking + projection; sayfalı uçlar sayım + sayfa = 2 sorgu.</summary>
+/// <summary>Stok OKUMA sözleşmesi (admin). AsNoTracking + projection; sayfalı uçlar sayım + sayfa = 2 sorgu (+ hareketlerde tek toplu aktör sorgusu).</summary>
 public interface IInventoryQueries
 {
     Task<IReadOnlyList<WarehouseDto>> GetWarehousesAsync(CancellationToken cancellationToken);

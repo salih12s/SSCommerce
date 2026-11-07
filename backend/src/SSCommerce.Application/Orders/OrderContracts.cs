@@ -105,7 +105,24 @@ public sealed record AdminOrderDto(
     long? GrandTotalMinor,
     IReadOnlyList<OrderItemDto> Items,
     IReadOnlyList<AdminOrderHistoryDto> StatusHistory,
-    bool Replayed);
+    bool Replayed,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<AdminOrderAllocationDto>? Allocations = null);
+
+/// <summary>Stok dağıtımı özeti (Faz 8, personel sipariş detayı): hangi SKU hangi depodan kaç adet düşüldü. Kişisel veri YOKTUR.</summary>
+public sealed record AdminOrderAllocationDto(string Sku, string WarehouseCode, int Quantity);
+
+/// <summary>
+/// Teslimat görünümü (Faz 8): YALNIZ Admin, POST ile (denetim izi bırakır). Kişisel veridir: loga, URL'ye ve listelere girmez.
+/// </summary>
+public sealed record DeliveryViewDto(
+    string RecipientName,
+    string Phone,
+    string Province,
+    string District,
+    string StreetAddress,
+    string? PostalCode,
+    string Label);
 
 public sealed record AdminOrderHistoryDto(string? FromStatus, string ToStatus, DateTimeOffset OccurredAt, string ActorKind, string? Reason);
 
@@ -130,7 +147,7 @@ public sealed record OrderStatusCommand(
 
 public sealed record OrderListQuery(int Page, int PageSize);
 
-public sealed record AdminOrderListQuery(OrderStatus? Status, int Page, int PageSize);
+public sealed record AdminOrderListQuery(OrderStatus? Status, int Page, int PageSize, bool OpenOnly = false);
 
 // ---- Sonuçlar ----
 
@@ -175,16 +192,26 @@ public enum OrderOperationStatus
 
     /// <summary>Kilit zaman aşımı: hiçbir şey yazılmadı, aynı anahtarla tekrar denenebilir (503 busy).</summary>
     Busy,
+
+    /// <summary>Kullanıcının açık (placed + processing) sipariş sayısı üst sınırda (409 open_order_limit, <see cref="OrderOperationResult.Limit"/>). Hiçbir şey yazılmadı.</summary>
+    OpenOrderLimit,
+
+    /// <summary>Son 24 saatte verilen sipariş sayısı (durumdan bağımsız) üst sınırda (429 order_daily_limit, <see cref="OrderOperationResult.Limit"/> + <see cref="OrderOperationResult.RetryAfterSeconds"/>). Hiçbir şey yazılmadı.</summary>
+    DailyOrderLimit,
 }
 
 /// <param name="Order">Müşteri görünümü (sipariş verme, müşteri iptali).</param>
 /// <param name="StaffOrder">Personel görünümü (adres yok).</param>
+/// <param name="Limit">Yalnız <see cref="OrderOperationStatus.OpenOrderLimit"/> ve <see cref="OrderOperationStatus.DailyOrderLimit"/>: uygulanan üst sınır.</param>
+/// <param name="RetryAfterSeconds">Yalnız <see cref="OrderOperationStatus.DailyOrderLimit"/>: Retry-After saniyesi (1..86400).</param>
 /// <param name="ItemIds">Yalnız <see cref="OrderOperationStatus.ItemInactive"/> ve <see cref="OrderOperationStatus.InsufficientStock"/>: SEPET satır kimlikleri.</param>
 public sealed record OrderOperationResult(
     OrderOperationStatus Status,
     OrderDto? Order = null,
     AdminOrderDto? StaffOrder = null,
-    IReadOnlyList<Guid>? ItemIds = null);
+    IReadOnlyList<Guid>? ItemIds = null,
+    int? Limit = null,
+    int? RetryAfterSeconds = null);
 
 // ---- Servis sözleşmeleri (uygulama Infrastructure'da) ----
 
@@ -214,4 +241,32 @@ public interface IOrderQueries
     Task<PagedDto<OrderSummaryDto>> ListAsync(Guid userId, OrderListQuery query, CancellationToken cancellationToken);
 
     Task<PagedDto<AdminOrderSummaryDto>> ListForStaffAsync(AdminOrderListQuery query, CancellationToken cancellationToken);
+
+    /// <summary>Personel sipariş detayı (Faz 8): kalemler, geçmiş ve stok dağıtımları (SKU, depo kodu, adet). Teslimat adresi ve müşteri kimliği YOKTUR.</summary>
+    Task<AdminOrderDto?> GetForStaffAsync(Guid orderId, CancellationToken cancellationToken);
+}
+
+// ---- Teslimat görünümü (Faz 8) ----
+
+public enum DeliveryViewStatus
+{
+    /// <summary>Teslimat bilgisi okundu ve <c>order.delivery_view</c> denetim satırı AYNI transaction'da yazıldı.</summary>
+    Viewed,
+
+    /// <summary>Sipariş yok (404 order_not_found). Denetim satırı yazılmaz.</summary>
+    NotFound,
+
+    /// <summary>Kilit zaman aşımı ya da deadlock: hiçbir şey yazılmadı (503 busy).</summary>
+    Busy,
+}
+
+public sealed record DeliveryViewResult(DeliveryViewStatus Status, DeliveryViewDto? Delivery = null);
+
+/// <summary>
+/// Admin'in bir siparişin teslimat bilgisini görmesi. POST'tur çünkü okuma bir DENETİM İZİ yazar (GET hiçbir şey yazmaz). Denetim <c>changes</c> kişisel veri
+/// taşımaz. Yanıt kişisel veridir: <c>no-store</c>, listelerde/URL'de/logda asla.
+/// </summary>
+public interface IDeliveryViewService
+{
+    Task<DeliveryViewResult> ViewAsync(Guid actorUserId, Guid orderId, CancellationToken cancellationToken);
 }

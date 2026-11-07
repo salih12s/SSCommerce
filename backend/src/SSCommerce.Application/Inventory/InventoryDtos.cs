@@ -20,6 +20,8 @@ public sealed record InventoryBalanceDto(
 /// (ilk sonuç, bakiye değişmedi). Listelerde her zaman false.
 /// <paramref name="ActorUserId"/>: işlemi İLK uygulayan yönetici (denetim kaydı). Tekrar (replay) yanıtında da ORİJİNAL aktördür,
 /// tekrarı gönderen kullanıcı değil.
+/// <paramref name="ActorEmail"/> (Faz 8): yalnız LİSTELERDE ve yalnız aktör şu an Admin ya da Warehouse rolündeyse dolu; müşteri aktörler (sipariş düşümü/iadesi)
+/// ve rolü sonradan kalkan kişiler için null ("Müşteri"/bilinmiyor). Sayfa başına tek toplu sorgu (N+1 yok). Yazma yanıtlarında null.
 /// </summary>
 public sealed record StockMovementDto(
     Guid Id,
@@ -33,6 +35,7 @@ public sealed record StockMovementDto(
     int OnHandAfter,
     DateTimeOffset OccurredAt,
     Guid ActorUserId,
-    bool Replayed);
+    bool Replayed,
+    string? ActorEmail = null);
 
 public sealed record PagedDto<T>(IReadOnlyList<T> Items, int Page, int PageSize, long TotalCount, int TotalPages);

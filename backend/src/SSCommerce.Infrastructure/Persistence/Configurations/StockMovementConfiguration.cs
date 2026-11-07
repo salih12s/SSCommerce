@@ -62,6 +62,8 @@ internal sealed class StockMovementConfiguration : IEntityTypeConfiguration<Stoc
         builder.HasIndex(m => new { m.ProductVariantId, m.OccurredAt }).HasDatabaseName("ix_stock_movements_product_variant_id_occurred_at");
         // actor_user_id FK'si: kullanıcı silme/denetim sorgusu bu sütunu tarar; EF'in otomatik "IX_" adı yerine açık ad.
         builder.HasIndex(m => m.ActorUserId).HasDatabaseName("ix_stock_movements_actor_user_id");
+        // Faz 8 panosu: son hareketler (en yeni önce, LIMIT) sıralama yapmadan okunur.
+        builder.HasIndex(m => new { m.OccurredAt, m.Id }).IsDescending(true, true).HasDatabaseName("ix_stock_movements_occurred_at_id");
 
         builder.HasOne<Warehouse>()
             .WithMany()

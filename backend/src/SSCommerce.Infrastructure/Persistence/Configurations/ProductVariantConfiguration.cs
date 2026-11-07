@@ -21,6 +21,7 @@ internal sealed class ProductVariantConfiguration : IEntityTypeConfiguration<Pro
                 "ck_product_variants_options_object",
                 $"jsonb_typeof(options) = 'object' AND pg_column_size(options) <= {CatalogRules.OptionsMaxBytes}");
             t.HasCheckConstraint("ck_product_variants_option_signature_not_blank", "btrim(option_signature) <> ''");
+            t.HasCheckConstraint("ck_product_variants_version_positive", "version >= 1");
         });
 
         builder.HasKey(v => v.Id).HasName("pk_product_variants");
@@ -33,6 +34,7 @@ internal sealed class ProductVariantConfiguration : IEntityTypeConfiguration<Pro
         builder.Property(v => v.Price).HasColumnName("price").HasColumnType("numeric(18,2)");
         builder.Property(v => v.Currency).HasColumnName("currency").HasColumnType("char(3)").IsRequired();
         builder.Property(v => v.IsActive).HasColumnName("is_active");
+        builder.Property(v => v.Version).HasColumnName("version").HasColumnType("integer").HasDefaultValue(1);
         builder.Property(v => v.CreatedAt).HasColumnName("created_at").HasColumnType("timestamptz");
         builder.Property(v => v.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamptz");
 

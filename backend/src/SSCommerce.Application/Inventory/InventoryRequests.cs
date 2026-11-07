@@ -13,7 +13,7 @@ public sealed record ReceiveStockRequest(Guid? WarehouseId, Guid? VariantId, lon
 public sealed record AdjustStockRequest(Guid? WarehouseId, Guid? VariantId, long? QuantityDelta, string? Type, string? Reason, string? Reference);
 
 /// <summary>Ham sayfalı sorgu dizeleri (tip hatası alan bazlı 400 olsun diye string; bkz. ProductListRequest).</summary>
-public sealed record BalanceListRequest(string? WarehouseId, string? Sku, string? Page, string? PageSize);
+public sealed record BalanceListRequest(string? WarehouseId, string? Sku, string? Page, string? PageSize, string? VariantId = null);
 
 public sealed record MovementListRequest(string? WarehouseId, string? VariantId, string? Page, string? PageSize);
 
@@ -23,6 +23,6 @@ public sealed record NewWarehouse(string Code, string Name);
 
 public sealed record WarehouseChange(string? Name, bool? IsActive);
 
-public sealed record BalanceListQuery(Guid? WarehouseId, string? Sku, int Page, int PageSize);
+public sealed record BalanceListQuery(Guid? WarehouseId, string? Sku, int Page, int PageSize, Guid? VariantId = null);
 
 public sealed record MovementListQuery(Guid? WarehouseId, Guid? VariantId, int Page, int PageSize);

@@ -175,6 +175,65 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("SSCommerce.Domain.Administration.AdminAuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<string>("Changes")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("changes");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_id");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("target_type");
+
+                    b.HasKey("Id")
+                        .HasName("pk_admin_audit_log");
+
+                    b.HasIndex("ActorUserId")
+                        .HasDatabaseName("ix_admin_audit_log_actor_user_id");
+
+                    b.HasIndex("OccurredAt", "Id")
+                        .IsDescending()
+                        .HasDatabaseName("ix_admin_audit_log_occurred_at_id");
+
+                    b.HasIndex("TargetType", "TargetId", "OccurredAt", "Id")
+                        .IsDescending(false, false, true, true)
+                        .HasDatabaseName("ix_admin_audit_log_target_type_target_id_occurred_at_id");
+
+                    b.ToTable("admin_audit_log", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_admin_audit_log_action_format", "action ~ '^[a-z]+(\\.[a-z_]+)+$'");
+
+                            t.HasCheckConstraint("ck_admin_audit_log_changes_object", "jsonb_typeof(changes) = 'object' AND octet_length(changes::text) <= 8192 AND NOT (changes ?| ARRAY['password', 'password_hash', 'security_stamp', 'token', 'email', 'phone', 'address', 'street_address'])");
+
+                            t.HasCheckConstraint("ck_admin_audit_log_target_type", "target_type IN ('category', 'product', 'variant', 'warehouse', 'user', 'order')");
+                        });
+                });
+
             modelBuilder.Entity("SSCommerce.Domain.Cart.Cart", b =>
                 {
                     b.Property<Guid>("Id")
@@ -289,6 +348,12 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamptz")
                         .HasColumnName("updated_at");
 
+                    b.Property<int>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("version");
+
                     b.HasKey("Id")
                         .HasName("pk_categories");
 
@@ -306,6 +371,8 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_categories_parent_not_self", "parent_id IS NULL OR parent_id <> id");
 
                             t.HasCheckConstraint("ck_categories_slug_format", "slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'");
+
+                            t.HasCheckConstraint("ck_categories_version_positive", "version >= 1");
                         });
                 });
 
@@ -362,6 +429,12 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamptz")
                         .HasColumnName("updated_at");
 
+                    b.Property<int>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("version");
+
                     b.HasKey("Id")
                         .HasName("pk_products");
 
@@ -383,6 +456,8 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_products_slug_format", "slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'");
 
                             t.HasCheckConstraint("ck_products_specifications_object", "specifications IS NULL OR (jsonb_typeof(specifications) = 'object' AND pg_column_size(specifications) <= 16384)");
+
+                            t.HasCheckConstraint("ck_products_version_positive", "version >= 1");
                         });
                 });
 
@@ -506,6 +581,12 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamptz")
                         .HasColumnName("updated_at");
 
+                    b.Property<int>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("version");
+
                     b.HasKey("Id")
                         .HasName("pk_product_variants");
 
@@ -530,6 +611,8 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_product_variants_price_non_negative", "price >= 0");
 
                             t.HasCheckConstraint("ck_product_variants_sku_format", "sku ~ '^[A-Z0-9]+(-[A-Z0-9]+)*$' AND char_length(sku) BETWEEN 3 AND 40");
+
+                            t.HasCheckConstraint("ck_product_variants_version_positive", "version >= 1");
                         });
                 });
 
@@ -745,6 +828,10 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ux_stock_movements_operation_key");
 
+                    b.HasIndex("OccurredAt", "Id")
+                        .IsDescending()
+                        .HasDatabaseName("ix_stock_movements_occurred_at_id");
+
                     b.HasIndex("ProductVariantId", "OccurredAt")
                         .HasDatabaseName("ix_stock_movements_product_variant_id_occurred_at");
 
@@ -929,6 +1016,14 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                     b.HasIndex("OrderNumber")
                         .IsUnique()
                         .HasDatabaseName("ux_orders_order_number");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_orders_open_user")
+                        .HasFilter("status IN ('placed', 'processing')");
+
+                    b.HasIndex("CreatedAt", "Id")
+                        .HasDatabaseName("ix_orders_open_created_at")
+                        .HasFilter("status IN ('placed', 'processing')");
 
                     b.HasIndex("UserId", "IdempotencyKey")
                         .IsUnique()
@@ -1168,6 +1263,10 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                     b.HasIndex("ActorUserId")
                         .HasDatabaseName("ix_order_status_history_actor_user_id");
 
+                    b.HasIndex("OccurredAt", "Id")
+                        .IsDescending()
+                        .HasDatabaseName("ix_order_status_history_occurred_at_id");
+
                     b.HasIndex("OrderId", "OccurredAt", "Id")
                         .HasDatabaseName("ix_order_status_history_order_id_occurred_at_id");
 
@@ -1305,6 +1404,16 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("SSCommerce.Domain.Administration.AdminAuditEntry", b =>
+                {
+                    b.HasOne("SSCommerce.Infrastructure.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_admin_audit_log_actor_user");
                 });
 
             modelBuilder.Entity("SSCommerce.Domain.Cart.Cart", b =>

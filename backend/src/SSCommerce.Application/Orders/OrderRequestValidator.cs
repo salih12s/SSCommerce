@@ -84,9 +84,23 @@ public static class OrderRequestValidator
             : RequestValidation<OrderListQuery>.Valid(new OrderListQuery(parsedPage, parsedPageSize));
     }
 
-    public static RequestValidation<AdminOrderListQuery> ValidateAdminList(string? status, string? page, string? pageSize)
+    public static RequestValidation<AdminOrderListQuery> ValidateAdminList(string? status, string? page, string? pageSize, string? open = null)
     {
         var errors = new Dictionary<string, string[]>();
+        var openOnly = false;
+        var rawOpen = open?.Trim();
+        if (!string.IsNullOrEmpty(rawOpen))
+        {
+            if (string.Equals(rawOpen, "true", StringComparison.Ordinal))
+            {
+                openOnly = true;
+            }
+            else if (!string.Equals(rawOpen, "false", StringComparison.Ordinal))
+            {
+                errors["open"] = ["open true ya da false olmalıdır."];
+            }
+        }
+
         OrderStatus? parsedStatus = null;
         var rawStatus = status?.Trim();
         if (!string.IsNullOrEmpty(rawStatus))
@@ -101,11 +115,16 @@ public static class OrderRequestValidator
             }
         }
 
+        if (openOnly && parsedStatus is not null)
+        {
+            errors["open"] = ["open=true ile status birlikte kullanılamaz."];
+        }
+
         var parsedPage = ParseInt(page, "page", DefaultPage, 1, MaxPage, errors);
         var parsedPageSize = ParseInt(pageSize, "pageSize", DefaultPageSize, 1, MaxPageSize, errors);
         return errors.Count > 0
             ? RequestValidation<AdminOrderListQuery>.Invalid(errors)
-            : RequestValidation<AdminOrderListQuery>.Valid(new AdminOrderListQuery(parsedStatus, parsedPage, parsedPageSize));
+            : RequestValidation<AdminOrderListQuery>.Valid(new AdminOrderListQuery(parsedStatus, parsedPage, parsedPageSize, openOnly));
     }
 
     /// <summary>Personel durum isteği: hedef durum ve isteğe bağlı neden. Aktör rolü İSTEKTEN alınmaz (endpoint principal'den çıkarır).</summary>

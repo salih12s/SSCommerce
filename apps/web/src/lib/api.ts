@@ -31,6 +31,25 @@ const messages: Record<string, string> = {
   order_transition_invalid: "Siparişin durumu değişmiş; bu işlem artık yapılamıyor.",
   stock_limit_exceeded: "Stok iadesi şu an yapılamadı; sipariş değişmedi. Biraz sonra tekrar dene.",
   timeout: "Yanıt zamanında gelmedi.",
+  open_order_limit: "Açık sipariş sınırına ulaştın. Yeni sipariş vermeden önce açık siparişlerinden birini iptal et ya da hazırlanmasını bekle.",
+  order_daily_limit: "Son 24 saatte verebileceğin sipariş sayısına ulaştın. Daha sonra tekrar dene.",
+  version_conflict: "Bu kayıt sizden sonra değişti. Güncel hâlini yükleyip değişikliği yeniden yapın.",
+  category_slug_taken: "Bu kategori adresi (slug) kullanılıyor.",
+  product_slug_taken: "Bu ürün adresi (slug) kullanılıyor.",
+  sku_taken: "Bu SKU kullanılıyor.",
+  variant_options_taken: "Bu ürünün aynı seçeneklere sahip bir varyantı var.",
+  category_cycle: "Kategori kendi alt dalının altına taşınamaz.",
+  category_too_deep: "Kategori ağacı en çok 5 düzey olabilir.",
+  category_not_found: "Kategori bulunamadı.",
+  product_not_found: "Ürün bulunamadı.",
+  user_not_found: "Bu kimlikte bir hesap yok.",
+  image_not_approved: "Seçilen görsel onaylı görsel listesinde yok.",
+  role_self_demotion: "Kendi yönetici rolünü kaldıramazsın. Başka bir yöneticiden iste.",
+  last_admin: "Son yönetici kaldırılamaz. Önce başka bir hesaba yönetici rolü ver.",
+  warehouse_code_taken: "Bu depo kodu kullanılıyor.",
+  warehouse_not_found: "Depo bulunamadı.",
+  warehouse_inactive: "Bu depo pasif; stok işlemi yapılamaz.",
+  stock_busy: "Stok şu an meşgul. Birkaç saniye sonra aynı işlemi tekrar gönder.",
 };
 
 async function failure(response: Response, sent = true): Promise<ApiFailure> {
@@ -40,7 +59,8 @@ async function failure(response: Response, sent = true): Promise<ApiFailure> {
   const errors = (body.errors && typeof body.errors === "object" ? body.errors : {}) as Record<string, string[]>;
   const message = messages[code] ?? (response.status >= 500 ? "Sunucu şu an yanıt veremiyor. Lütfen tekrar dene." : "İşlem tamamlanamadı. Lütfen tekrar dene.");
   const raw = Number(response.headers.get("Retry-After"));
-  const retryAfter = Number.isFinite(raw) && raw > 0 && raw <= 3600 ? Math.ceil(raw) : null;
+  const maxRetry = code === "order_daily_limit" ? 86_400 : 3600; // günlük sınır saatlerce sürebilir
+  const retryAfter = Number.isFinite(raw) && raw > 0 && raw <= maxRetry ? Math.ceil(raw) : null;
   return { ok: false, status: response.status, code, message, errors, extra: body, sent, retryAfter };
 }
 const offlineFailure = (sent: boolean, timedOut = false): ApiFailure => ({

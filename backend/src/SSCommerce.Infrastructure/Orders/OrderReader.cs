@@ -53,7 +53,11 @@ internal sealed class OrderReader(SSCommerceDbContext db)
     }
 
     /// <summary>Personel görünümü: teslimat adresi ve kullanıcı bilgisi YOK.</summary>
-    public async Task<AdminOrderDto?> LoadForStaffAsync(Guid orderId, bool replayed, CancellationToken cancellationToken)
+    public async Task<AdminOrderDto?> LoadForStaffAsync(
+        Guid orderId,
+        bool replayed,
+        CancellationToken cancellationToken,
+        bool includeAllocations = false)
     {
         var order = await db.Orders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
         if (order is null)
@@ -63,6 +67,7 @@ internal sealed class OrderReader(SSCommerceDbContext db)
 
         var items = await LoadItemsAsync(orderId, cancellationToken);
         var history = await LoadHistoryAsync(orderId, cancellationToken);
+        var allocations = includeAllocations ? await LoadAllocationsAsync(orderId, cancellationToken) : null;
         return new AdminOrderDto(
             order.Id,
             order.DisplayNumber,
@@ -82,7 +87,24 @@ internal sealed class OrderReader(SSCommerceDbContext db)
                 h.OccurredAt,
                 OrderActorKinds.ToWire(h.ActorKind),
                 h.Reason)).ToList(),
-            replayed);
+            replayed,
+            allocations);
+    }
+
+    /// <summary>Stok dağıtımları: SKU (kalem anlık görüntüsü) + depo kodu + adet. Tek sorgu, kararlı sıra (SKU, depo kodu bayt sıralı). Kişisel veri yok.</summary>
+    private async Task<List<AdminOrderAllocationDto>> LoadAllocationsAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        var rows = await (
+            from allocation in db.OrderInventoryAllocations.AsNoTracking()
+            join item in db.OrderItems on allocation.OrderItemId equals item.Id
+            join warehouse in db.Warehouses on allocation.WarehouseId equals warehouse.Id
+            where item.OrderId == orderId
+            select new { item.Sku, WarehouseCode = warehouse.Code, allocation.Quantity })
+            .ToListAsync(cancellationToken);
+        return rows
+            .OrderBy(r => r.Sku, StringComparer.Ordinal).ThenBy(r => r.WarehouseCode, StringComparer.Ordinal)
+            .Select(r => new AdminOrderAllocationDto(r.Sku, r.WarehouseCode, r.Quantity))
+            .ToList();
     }
 
     private Task<List<OrderItem>> LoadItemsAsync(Guid orderId, CancellationToken cancellationToken) =>

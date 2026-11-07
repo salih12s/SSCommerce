@@ -52,7 +52,7 @@ public static class InventoryEndpoints
         admin.MapGet("/inventory/balances", GetBalances)
             .WithTags("Admin Inventory")
             .WithName("ListInventoryBalances")
-            .WithSummary("Sayfalı bakiye listesi (warehouseId, sku süzgeçleri).")
+            .WithSummary("Sayfalı bakiye listesi (warehouseId, variantId, sku süzgeçleri).")
             .Produces<PagedDto<InventoryBalanceDto>>(StatusCodes.Status200OK)
             .ProducesValidationProblem();
 
@@ -106,6 +106,7 @@ public static class InventoryEndpoints
 
     private static async Task<IResult> CreateWarehouse(
         HttpContext http,
+        ClaimsPrincipal user,
         IInventoryService inventory,
         CancellationToken cancellationToken)
     {
@@ -121,15 +122,19 @@ public static class InventoryEndpoints
             return ApiResults.ValidationFailed(validation.Errors);
         }
 
-        var result = await inventory.CreateWarehouseAsync(validation.Value!, cancellationToken);
-        return result.Status == WarehouseWriteStatus.CodeTaken
-            ? ApiResults.Problem(StatusCodes.Status409Conflict, "Bu depo kodu kullanılıyor", ApiErrorCodes.WarehouseCodeTaken)
-            : Results.Json(result.Warehouse, statusCode: StatusCodes.Status201Created);
+        var result = await inventory.CreateWarehouseAsync(user.GetUserId(), validation.Value!, cancellationToken);
+        return result.Status switch
+        {
+            WarehouseWriteStatus.CodeTaken => ApiResults.Problem(StatusCodes.Status409Conflict, "Bu depo kodu kullanılıyor", ApiErrorCodes.WarehouseCodeTaken),
+            WarehouseWriteStatus.Busy => Busy(),
+            _ => Results.Json(result.Warehouse, statusCode: StatusCodes.Status201Created),
+        };
     }
 
     private static async Task<IResult> UpdateWarehouse(
         Guid id,
         HttpContext http,
+        ClaimsPrincipal user,
         IInventoryService inventory,
         CancellationToken cancellationToken)
     {
@@ -145,8 +150,13 @@ public static class InventoryEndpoints
             return ApiResults.ValidationFailed(validation.Errors);
         }
 
-        var result = await inventory.UpdateWarehouseAsync(id, validation.Value!, cancellationToken);
-        return result.Status == WarehouseWriteStatus.NotFound ? WarehouseNotFound() : Results.Ok(result.Warehouse);
+        var result = await inventory.UpdateWarehouseAsync(user.GetUserId(), id, validation.Value!, cancellationToken);
+        return result.Status switch
+        {
+            WarehouseWriteStatus.NotFound => WarehouseNotFound(),
+            WarehouseWriteStatus.Busy => Busy(),
+            _ => Results.Ok(result.Warehouse),
+        };
     }
 
     private static async Task<IResult> GetBalances(
@@ -155,10 +165,11 @@ public static class InventoryEndpoints
         string? warehouseId = null,
         string? sku = null,
         string? page = null,
-        string? pageSize = null)
+        string? pageSize = null,
+        string? variantId = null)
     {
         // Sorgu parametreleri string: tip hatası (page=abc) varsayılan bağlama 400'üne değil alan bazlı validation_failed'a düşer.
-        var validation = InventoryRequestValidator.ValidateBalanceQuery(new BalanceListRequest(warehouseId, sku, page, pageSize));
+        var validation = InventoryRequestValidator.ValidateBalanceQuery(new BalanceListRequest(warehouseId, sku, page, pageSize, variantId));
         return validation.IsValid
             ? Results.Ok(await queries.GetBalancesAsync(validation.Value!, cancellationToken))
             : ApiResults.ValidationFailed(validation.Errors);
@@ -239,6 +250,9 @@ public static class InventoryEndpoints
             StatusCodes.Status503ServiceUnavailable, "Stok şu an meşgul, lütfen tekrar deneyin", ApiErrorCodes.StockBusy),
         _ => throw new InvalidOperationException("Bilinmeyen stok işlem durumu."),
     };
+
+    private static IResult Busy() =>
+        ApiResults.Problem(StatusCodes.Status503ServiceUnavailable, "Sistem meşgul, lütfen tekrar deneyin", ApiErrorCodes.Busy);
 
     private static IResult WarehouseNotFound() =>
         ApiResults.Problem(StatusCodes.Status404NotFound, "Depo bulunamadı", ApiErrorCodes.WarehouseNotFound);

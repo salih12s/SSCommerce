@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SSCommerce.Application.Inventory;
 using SSCommerce.Domain.Inventory;
+using SSCommerce.Infrastructure.Administration;
 using SSCommerce.Infrastructure.Persistence;
 
 namespace SSCommerce.Infrastructure.Inventory;
@@ -36,6 +37,11 @@ internal sealed class InventoryQueries(SSCommerceDbContext db) : IInventoryQueri
             rows = rows.Where(r => r.Sku == sku);
         }
 
+        if (query.VariantId is { } variantId)
+        {
+            rows = rows.Where(r => r.balance.ProductVariantId == variantId);
+        }
+
         var totalCount = await rows.LongCountAsync(cancellationToken);
         var items = await Page(rows.OrderBy(r => r.Code).ThenBy(r => r.Sku).ThenBy(r => r.balance.Id), query.Page, query.PageSize, totalCount)
             .Select(r => new InventoryBalanceDto(
@@ -68,7 +74,11 @@ internal sealed class InventoryQueries(SSCommerceDbContext db) : IInventoryQueri
         var page = await Page(rows.OrderByDescending(m => m.OccurredAt).ThenByDescending(m => m.Id), query.Page, query.PageSize, totalCount)
             .ToListAsync(cancellationToken);
 
-        var items = page.Select(m => InventoryService.ToDto(m, replayed: false)).ToList();
+        // Aktör e-postası: sayfadaki TÜM aktörler için tek toplu sorgu (N+1 yok); yalnız şu an Admin/Warehouse olanlar çözülür.
+        var emails = await StaffDirectory.ResolveEmailsAsync(db, page.Select(m => m.ActorUserId), cancellationToken);
+        var items = page
+            .Select(m => InventoryService.ToDto(m, replayed: false) with { ActorEmail = emails.GetValueOrDefault(m.ActorUserId) })
+            .ToList();
         return new PagedDto<StockMovementDto>(items, query.Page, query.PageSize, totalCount, TotalPages(totalCount, query.PageSize));
     }
 

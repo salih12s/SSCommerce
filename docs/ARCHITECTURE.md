@@ -62,6 +62,17 @@ Bir istek şu yoldan geçer: `GET /api/v1/products?...` → `Api/Catalog/Catalog
 - Personel uçları `/api/v1/admin/orders` ayrı grupta `WarehouseOrAdmin` ister; iptal Admin gerektirir. Personel yanıtlarında müşteri verisi yoktur.
 - `ReadinessWarmUp` dinlemeye başlamadan önce çalışır, `postgres` kontrolü EF'siz ham Npgsql kullanır (D-065).
 
+### Faz 8 ERP / Admin (D-068–D-076)
+- Sözleşme `docs/CONTRACT_PHASE_8.md` (FROZEN v1.1). Tek ek, yalnız ekleyen migration `AddAdminOperations` (`categories`, `products`, `product_variants` üzerinde `version`; append-only `admin_audit_log`; kategori üst-düğüm trigger'ı; sipariş durum trigger'ı; kısmi indeksler). Mevcut migration'lar düzenlenmedi, betik `DROP` içermez.
+- Roller: `AdminOnly` (katalog, stok, depo, pano, rapor, denetim, kullanıcı/rol, teslimat görüntüleme) ve `WarehouseOrAdmin` (yalnız `/api/v1/admin/orders`: liste, detay, ileri geçişler; iptal Admin). Warehouse katalog, stok, pano, rapor, denetim, rol ve teslimat verisine erişemez. Teslimat verisini Warehouse'a açmak sahip kararı bekliyor (D-071) ve açılmadı.
+- Katalog yazmaları (`Infrastructure/Catalog/AdminCatalogService`): tek transaction, `lock_timeout` 5 sn, kategori yazmalarında önce `catalog:category-tree` advisory kilidi, sonra satır kilidi; iyimser sürüm (`version_conflict` 409 + `currentVersion`) sürüm satır kilidinden SONRA karşılaştırılır. Kilit zaman aşımı ve deadlock 503 `busy` olur; `TransactionalSql.PostgresOf` iç istisna zincirini gezer, çünkü Npgsql yürütme stratejisi 55P03/40P01'i `InvalidOperationException` içine sarar (D-074).
+- Her yönetim yazması aynı transaction'da `admin_audit_log` satırı bırakır; `changes` alanında e-posta, telefon, adres, parola vb. yasaktır (CHECK). Teslimat görüntüleme POST'tur ve `order.delivery_view` denetimi yazar.
+- Rol yönetimi: kimlik hesap kimliğiyledir (e-posta araması yok), tek advisory kilit `identity:roles`, yapanın Admin olduğu taze SQL ile yeniden doğrulanır, `role_self_demotion` ve `last_admin` (kilitsiz Admin sayısı) korumaları, değişimde hedefin oturumları iptal edilir. İlk Admin yalnız yerel komutla: `dotnet run --project backend/src/SSCommerce.Api -- --bootstrap-admin` (yalnız Development, loopback bağlantı, HTTP rotası yok; D-073).
+- Pano KPI'ları dürüsttür: sipariş sayıları durum bazlı; `openOrders.unpaidSubtotalMinor` yalnız `placed`+`processing` kalem ara toplamıdır ve hiçbir yerde ciro/gelir/tahsilat diye anılmaz (ödeme kaydı yok). Stok sayıları satılabilir varyant (varyant, ürün ve kategori aktif) ve aktif depolar üzerindendir; "az" `0 < onHand ≤ eşik`.
+- Ödenmemiş sipariş sınırları (F8.5, D-072): hesap başına açık `placed`+`processing` ≤ 3 (409 `open_order_limit`), kayan 24 saatte ≤ 10 sipariş durumdan bağımsız (429 `order_daily_limit`, `Retry-After` = pencereden çıkışa kalan sürenin tavanı, 1..86400). Sepet satır kilidi altında sayılır; idempotency tekrarı sayılmaz. Üretim eşikleri `PRODUCTION_ORDERING_POLICY_PENDING`. E2E ortamında günlük sınır yalnız E2eHost alt sürecinde 11'e çıkarılır (`E2E_MAX_ORDERS_PER_DAY`, D-075); `SSCommerce.Api`'de varsayılanlar 10 ve 3'tür.
+- Web: vitrin `src/app/(shop)/` route group'unda, yönetim `src/app/admin/` altında (11 rota; kendi düzeni, vitrin başlığı/altlığı yok). `src/proxy.ts` `/admin` için `/auth/me` ile arayüz kapısıdır; yetki API'dedir. Admin verisi tarayıcıda `no-store` ile okunur, HTML/RSC'ye gömülmez.
+- E2E: `/fixture/role` yalnız E2eHost'un loopback kontrol ucunda bulunur (yalnız tam eşleşen `Admin`/`Warehouse`, her çağrıda güvenlik damgasını yeniler, üretim API'sinde yoktur; D-076). Playwright rol atamasını yalnız bu uçtan yapar, başarısızlıkta açıkça düşer; Docker CLI gerekmez.
+
 ## Veri kuralları
 - Para: domain'de C# `decimal`, veritabanında `numeric(18,2)`. API'de **kuruş cinsinden tam sayı** (`priceMinor: 129900` = 1.299,00 TL).
 - Zaman: kalıcı veride UTC (`timestamptz`).
@@ -82,7 +93,7 @@ Bir istek şu yoldan geçer: `GET /api/v1/products?...` → `Api/Catalog/Catalog
 
 ## Güvenlik sınırları
 - Sırlar yalnızca ortam değişkenlerinde (`.env`, Git dışı). Repoda yalnızca `.env.example` bulunur.
-- Faz 3 public okuma uçları; Faz 4 cookie auth, CSRF ve rol policy'leri. Web bu uçlara bağlıdır (D-041); admin CRUD Faz 8'dedir. E-posta doğrulama/parola sıfırlama yoktur.
+- Faz 3 public okuma uçları; Faz 4 cookie auth, CSRF ve rol policy'leri. Web bu uçlara bağlıdır (D-041); admin CRUD Faz 8 ile gelmiştir (aşağıdaki Faz 8 bölümü). E-posta doğrulama/parola sıfırlama yoktur.
 - MVP'de (Faz 0–9) gerçek ödeme yok. Faz 7 siparişi ödeme almadan oluşturur; gerçek ödeme entegrasyonu sonraki sürüme aittir. Arayüz hiçbir zaman ödeme alınmış izlenimi vermez.
 
 ## Altyapı

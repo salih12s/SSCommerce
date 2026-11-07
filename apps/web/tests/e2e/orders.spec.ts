@@ -136,10 +136,17 @@ test("liste: yeni kullanıcıda boş, 11 siparişte sayfalama, en yeni önce, ?p
     // 11 sipariş (sayfa boyutu 10)
     await registerApi(page.request, baseURL!);
     const address = await addressApi(page.request, baseURL!);
+    // Faz 8 / F8.5: kullanıcı başına en çok 3 AÇIK sipariş (placed + processing) ve 24 saatte en çok MaxOrdersPerRollingDay sipariş vardır.
+    // Sayfalama için 11 sipariş gerekir: açık sayısını 3'te tutmak üzere en eski açık sipariş her seferinde tamamlanır (personel yürütmesi fixture'ı);
+    // günlük sınır playwright.config.ts'te E2E için 11'e çıkarılır (sunucu varsayılanı 10; sınırların kendisi admin-limits.spec.ts'te sınanır).
     const numbers: string[] = [];
+    const ids: string[] = [];
     for (let i = 0; i < 11; i++) {
+      if (i >= 3) for (const status of ["processing", "shipped", "completed"] as const) await orderStatusFixture(request, ids[i - 3], status);
       await cartApi(page.request, baseURL!, v.id, 1);
-      numbers.push((await placeOrderApi(page.request, baseURL!, address.id)).orderNumber);
+      const placed = await placeOrderApi(page.request, baseURL!, address.id);
+      numbers.push(placed.orderNumber);
+      ids.push(placed.id);
     }
     await page.goto("/siparisler");
     const rows = page.getByTestId("order-row");

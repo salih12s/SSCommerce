@@ -148,6 +148,7 @@ public static class InventoryRequestValidator
     {
         var errors = new Dictionary<string, string[]>();
         var warehouseId = OptionalGuid(request.WarehouseId, "warehouseId", errors);
+        var variantId = OptionalGuid(request.VariantId, "variantId", errors);
         var sku = request.Sku?.Trim();
         if (string.IsNullOrEmpty(sku))
         {
@@ -162,7 +163,7 @@ public static class InventoryRequestValidator
         var pageSize = ParseInt(request.PageSize, "pageSize", DefaultPageSize, 1, MaxPageSize, errors);
         return errors.Count > 0
             ? RequestValidation<BalanceListQuery>.Invalid(errors)
-            : RequestValidation<BalanceListQuery>.Valid(new BalanceListQuery(warehouseId, sku, page, pageSize));
+            : RequestValidation<BalanceListQuery>.Valid(new BalanceListQuery(warehouseId, sku, page, pageSize, variantId));
     }
 
     public static RequestValidation<MovementListQuery> ValidateMovementQuery(MovementListRequest request)

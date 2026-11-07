@@ -95,6 +95,16 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
             .IsDescending(false, true, true)
             .HasDatabaseName("ix_orders_status_created_at_id");
 
+        // Faz 8: açık siparişler (placed, processing). Durum listesi SQL SABİTİDİR; sorgular da sabit yazmalı ki kısmi indeks seçilsin.
+        // Yaşlanan açık sipariş sayımı / en eski 10 açık sipariş (EXPLAIN: Seq/Bitmap ~2 ms -> Index Scan ~0.03 ms, 3000 açık satırda).
+        builder.HasIndex(o => new { o.CreatedAt, o.Id })
+            .HasFilter("status IN ('placed', 'processing')")
+            .HasDatabaseName("ix_orders_open_created_at");
+        // Kullanıcı başına açık sipariş sayımı (yerleştirme yolunda sepet kilidi altında). EXPLAIN: 100k siparişte 0,67 ms/53 tampon -> 0,06 ms/5.
+        builder.HasIndex(o => o.UserId)
+            .HasFilter("status IN ('placed', 'processing')")
+            .HasDatabaseName("ix_orders_open_user");
+
         // RESTRICT: siparişi olan kullanıcı silinemez (D-064); kişisel veri silme akışı sonraki sürüme kalır.
         builder.HasOne<AppUser>()
             .WithMany()

@@ -113,8 +113,39 @@ Demo katalog için stok seed edilmez (D-047), yani yeni kurulumda her ürün "St
 
 Browser testleri `backend/tools/SSCommerce.E2eHost` ile sıfırdan `sscommerce_test_<guid>` açar, bütün migration'ları, demo seed'i ve test stoğunu uygular, test sonunda yalnız kendi DB'sini temizler. Fiyat ve stok değiştiren senaryolar için yalnız loopback'te açılan kontrol ucu (`127.0.0.1:5082`) bu araçtadır; API'de böyle bir uç yoktur. Mevcut geliştirme verisi değişmez. API yalnız test child process'inde yüksek rate limit alır; `test:proxy` ayrı DB ve düşük sınırla gerçek sınırlamayı doğrular. Ani OS/process kill durumunda kalan test DB'si otomatik başarı sayılmaz; normal teardown temizliğin onayını bekler.
 
+## Yönetim paneli (`/admin`, Faz 8)
+
+`/admin` aynı Next.js uygulamasında, vitrinden ayrı bir düzenle açılır (11 rota): pano, ürünler (oluştur/düzenle/aktiflik/fiyat/görseller), kategoriler (ağaç), stok, depolar, siparişler ve ayrıntısı, raporlar, kullanıcılar. Sözleşme: [`docs/CONTRACT_PHASE_8.md`](docs/CONTRACT_PHASE_8.md).
+
+| Rol | Yapabildikleri |
+|---|---|
+| `Admin` | Katalog, stok, depo, pano, rapor, denetim kaydı, kullanıcı/rol yönetimi, bütün sipariş geçişleri (iptal dahil), teslimat bilgisini görüntüleme (her görüntüleme denetim kaydı bırakır) |
+| `Warehouse` | Yalnız sipariş listesi/ayrıntısı ve **ileri** geçişler (hazırlama, kargo, teslim). İptal, katalog, stok, pano, rapor ve teslimat adresi/telefonu yok (D-071: Warehouse'a teslimat verisi açmak sahip kararı bekliyor) |
+| `Customer` | Yalnız kendi alışverişi ve siparişleri; `/admin` 403 |
+
+Yetki yalnız API'dedir. Arayüzdeki `/admin` kapısı (`src/proxy.ts`) yönlendirme kolaylığıdır, güvenlik sınırı değildir.
+
+**İlk Admin (güvenli kurulum).** Varsayılan Admin hesabı ve HTTP üzerinden Admin yapma yolu yoktur. Önce `/kayit` ile normal bir hesap açın, sonra yerel makinede, **yalnız Development ortamında ve loopback veritabanına karşı**:
+
+```powershell
+$env:ASPNETCORE_ENVIRONMENT = "Development"
+dotnet run --project backend/src/SSCommerce.Api -- --bootstrap-admin
+```
+
+Komut kayıtlı hesabın e-postasını iki kez ister (parola istemez, yazdırmaz, loglamaz), yalnız hiç Admin yokken çalışır ve tek transaction'da rolü verir, oturumları iptal eder, denetim satırı yazar. Sonra hesapla yeniden giriş yapın. Sonraki personel için Admin, kişinin `/hesabim` sayfasındaki **hesap kimliğini** (e-posta değil) alıp rol API'sini ya da `/admin/kullanicilar` ekranını kullanır. Son Admin kendi rolünü kaldıramaz.
+
+**Pano göstergeleri.** Sipariş sayıları durum bazlıdır. "Ödenmemiş sipariş ara toplamı" yalnız açık (`placed`+`processing`) siparişlerin kalem toplamıdır; **ciro, gelir ya da tahsilat değildir** (ödeme kaydı yoktur), kargo ve genel toplam yoktur. Stok göstergeleri satılabilir varyantlar (varyant, ürün ve kategori aktif) ve aktif depolar üzerinden hesaplanır.
+
+**Ödenmemiş sipariş sınırları.** Hesap başına en çok 3 açık sipariş (`409 open_order_limit`) ve kayan 24 saatte en çok 10 sipariş (`429 order_daily_limit`, `Retry-After` ile). Ayarlar `Ordering__MaxOpenOrdersPerUser` ve `Ordering__MaxOrdersPerRollingDay`. Üretim eşikleri sahip onayı bekliyor (`PRODUCTION_ORDERING_POLICY_PENDING`).
+
+**Üretim önkoşulları (Faz 8'in eklediği/vurguladığı).**
+- `WEB_TRUSTED_PROXIES` (web) ve `Security__TrustedProxies__*` (API) birbirine uygun ayarlanmalıdır. Web'in önünde gerçek bir ters proxy varken `WEB_TRUSTED_PROXIES` boş kalırsa istemci IP'si okunamaz ve hız sınırı kovası bütün istemciler için tek olur (sağlık kapısında gözlendi).
+- `--bootstrap-admin` üretim veritabanına karşı kullanılmaz; yalnız Development + loopback korumalıdır, bu korumanın tek başına yeterli olduğu varsayılmamalıdır.
+- Gerçek ödeme, iade, e-posta doğrulama, parola sıfırlama ve `/admin` için sıkı CSP yoktur (Faz 9 ve sonrası).
+- Veritabanı: yeni migration `AddAdminOperations` yalnız ekleyicidir. Mevcut bir veritabanına uygulamadan önce `pg_dump -Fc` yedeği alın; dev veritabanında uygulama sahibinin onayına bağlıdır.
+
 ## Henüz yapılmayanlar
 
-- ERP/Admin (8), kalite ve deployment (9). Ayrıntı: [ROADMAP](docs/ROADMAP.md). Vitrindeki ürünler ve fiyatlar **demo verisidir**; ödeme yoktur.
+- Kalite ve deployment (9). ERP/Admin (8) yerelde doğrulandı ama commit edilmedi ve `AddAdminOperations` geliştirme veritabanına henüz uygulanmadı. Ayrıntı: [ROADMAP](docs/ROADMAP.md). Vitrindeki ürünler ve fiyatlar **demo verisidir**; ödeme yoktur.
 - MVP dışı: gerçek ödeme entegrasyonu ve stok rezervasyonu.
 - Uzak CI: GitHub hesabının faturalandırma kilidi yüzünden çalışmıyor (BLOCKED_EXTERNAL); bütün kontroller yerelde koşuluyor.

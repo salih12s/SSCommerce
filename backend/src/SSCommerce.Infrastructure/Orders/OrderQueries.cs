@@ -50,17 +50,26 @@ internal sealed class OrderQueries(SSCommerceDbContext db, OrderReader reader) :
         return Page(summaries, query.Page, query.PageSize, total);
     }
 
+    public Task<AdminOrderDto?> GetForStaffAsync(Guid orderId, CancellationToken cancellationToken) =>
+        reader.LoadForStaffAsync(orderId, replayed: false, cancellationToken, includeAllocations: true);
+
     public async Task<PagedDto<AdminOrderSummaryDto>> ListForStaffAsync(AdminOrderListQuery query, CancellationToken cancellationToken)
     {
-        var all = db.Orders.AsNoTracking();
+        // AÇIK siparişler (placed + processing, en eski önce): durum listesi SQL SABİTİDİR (parametre değil), böylece kısmi indeks ix_orders_open_created_at seçilir
+        // (docs/CONTRACT_PHASE_8.md; EXPLAIN kanıtı p8-explain.sql). Diğer durumlar mevcut ix_orders_status_created_at_id ile yeni önce sıralanır.
+        var all = query.OpenOnly
+            ? db.Orders.FromSqlRaw("SELECT * FROM orders WHERE status IN ('placed', 'processing')").AsNoTracking()
+            : db.Orders.AsNoTracking();
         if (query.Status is { } status)
         {
             all = all.Where(o => o.Status == status);
         }
 
         var total = await all.LongCountAsync(cancellationToken);
-        var rows = await all
-            .OrderByDescending(o => o.CreatedAt).ThenByDescending(o => o.Id)
+        var ordered = query.OpenOnly
+            ? all.OrderBy(o => o.CreatedAt).ThenBy(o => o.Id)
+            : all.OrderByDescending(o => o.CreatedAt).ThenByDescending(o => o.Id);
+        var rows = await ordered
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(o => new { o.Id, o.OrderNumber, o.Status, o.CreatedAt, o.UpdatedAt, o.Currency, o.ItemSubtotal, o.ShippingStatus })
             .ToListAsync(cancellationToken);

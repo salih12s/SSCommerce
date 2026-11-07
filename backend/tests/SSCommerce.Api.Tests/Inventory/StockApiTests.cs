@@ -423,7 +423,7 @@ public class StockApiTests(InventoryApiFixture fixture)
 
         // Yanıt şekli (sözleşme): tam bu alanlar, para/birim yok, aktör yok.
         Assert.Equal(
-            new[] { "actorUserId", "id", "onHandAfter", "occurredAt", "operationType", "quantityDelta", "reason", "reference", "replayed", "sku", "variantId", "warehouseId" }.Order().ToArray(),
+            new[] { "actorEmail", "actorUserId", "id", "onHandAfter", "occurredAt", "operationType", "quantityDelta", "reason", "reference", "replayed", "sku", "variantId", "warehouseId" }.Order().ToArray(),
             created.RootElement.EnumerateObject().Select(p => p.Name).Order().ToArray());
         Assert.Equal(sku, created.RootElement.GetProperty("sku").GetString());
         Assert.Equal("receiving", created.RootElement.GetProperty("operationType").GetString());
@@ -553,10 +553,10 @@ public class StockApiTests(InventoryApiFixture fixture)
         public Task<StockOperationResult> ApplyStockOperationAsync(StockCommand command, CancellationToken cancellationToken) =>
             throw new InvalidOperationException(message);
 
-        public Task<WarehouseWriteResult> CreateWarehouseAsync(NewWarehouse warehouse, CancellationToken cancellationToken) =>
+        public Task<WarehouseWriteResult> CreateWarehouseAsync(Guid actorUserId, NewWarehouse warehouse, CancellationToken cancellationToken) =>
             throw new InvalidOperationException(message);
 
-        public Task<WarehouseWriteResult> UpdateWarehouseAsync(Guid id, WarehouseChange change, CancellationToken cancellationToken) =>
+        public Task<WarehouseWriteResult> UpdateWarehouseAsync(Guid actorUserId, Guid id, WarehouseChange change, CancellationToken cancellationToken) =>
             throw new InvalidOperationException(message);
     }
 

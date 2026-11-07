@@ -15,6 +15,7 @@ Bunlardan yalnızca `PASS` başarıdır. Kanıtlar ilgili bölümde belirtilen 2
 | 5 | **PASS (yerel)** | Atomik stok, idempotency, eşzamanlılık gerçek PostgreSQL'de; admin API; dürüst public stok. Bölüm: "Faz 5: Inventory" | `40f030b` | `main`'e birleştirme kararı |
 | 6 | **PASS (yerel)** | Sepet, adres, salt okunur önizleme, `/sepet`, `/checkout`, `/hesabim/adresler`. Bölüm: "Faz 5–6 nihai kabul" | `40f030b` | `main`'e birleştirme kararı |
 | 7 | **PASS (yerel)** | Sipariş, idempotency, iptal, personel geçişleri, `/siparisler`. Bölüm: "Faz 7: Ordering" | Kod `508458b`; belgeler hemen sonraki commit; `feat/phase-3-4-complete` push edildi · uzak CI: BLOCKED_EXTERNAL | `main`'e birleştirme kararı; Faz 8 yeni talimat ister |
+| 8 | **VERIFIED (yerel) · PENDING_DEV_MIGRATION_APPROVAL** | Admin API + `/admin` (11 rota), rol/stok/katalog/sipariş yönetimi, F8.5 sınırları. Backend Release 2195/0/0, Playwright 210/0/0 (50 admin). Güvenlik/sağlık/QA: PASS_WITH_FINDINGS. Bölüm: "Faz 8: nihai doğrulama" | Commit/push yok; migration dev DB'ye uygulanmadı · uzak CI: BLOCKED_EXTERNAL | Dev migration onayı; sonra Git onayı |
 
 **Yerel teknik durum: bütün kapılar PASS.** Son kanıtlar "Faz 7: Ordering" bölümünde. Uzak CI GitHub hesabının faturalandırma kilidi yüzünden çalışmıyor (BLOCKED_EXTERNAL); ayrıntı "Git durumu"nda.
 
@@ -495,3 +496,91 @@ Test edilmeyenler ve sınırlar:
 - Dev ortamında stok ve admin yok: orada sipariş verilemez, uçtan uca akış E2E ortamında kanıtlıdır (GOAL §6).
 
 Git: başlangıç HEAD `a689910`. Commit 1 `508458b` (95 dosya, açık liste, `git add -A` yok): kod + test + migration. Commit 2: `CLAUDE.md`, `README.md`, `docs/*`, `GOAL_PHASE_7_ORDERING_EN.md`. Kök referans PNG hiçbir commit'e girmedi. Stage öncesi sır taraması temiz (yalnız sızıntı testlerinde sahte `hunter2` değerleri).
+
+## Faz 8: ara durum kaydı (2026-11-02, oturum limiti nedeniyle)
+
+**Durum: YARIM — kabul kapısı çalıştırılmadı. Commit/push yok, dev DB'ye migration uygulanmadı.** Sözleşme: `docs/CONTRACT_PHASE_8.md` (FROZEN v1.1). Kararlar D-068–D-073.
+
+| Adım | Durum | Kanıt |
+|---|---|---|
+| Temel (Faz 0–7) | PASS | `dotnet build -c Release` 0; `dotnet test -c Release` **1737/0/0**, exit 0, 6 dk 59 sn, gerçek PostgreSQL 17 (5434) |
+| P8-SEC-0 security-auditor | Tamam (statik) | 3 MUST (sürüm kilitten sonra, rol API'sinde taze kontrol, e-posta yerine hesap kimliği) sözleşmeye işlendi |
+| P8-DB-0 database-dev | Tamam (salt okunur) | Kategori kilit sırası deadlock'u bulundu; sözleşmeye işlendi |
+| P8-HEALTH-0 health-observer | KISMİ | Docker/dev DB sağlıklı (RUNTIME); API uçları NOT_VERIFIED (çalışan API yoktu). Son kapı planı verdi: `live-stack.sh`, büyük seed, yalnız test DB'yi durdurma izni |
+| P8-DB-1 şema | Tamam (geliştirici koşusu) | `20261102073215_AddAdminOperations`; 137 yeni DB testi; tam paket Debug 1874/0/0; EXPLAIN ile `ix_orders_open_user` eklendi |
+| Migration provası (ana ajan) | PASS | Dev DB yedeği `%LOCALAPPDATA%\SSCommerce\backups\sscommerce-dev-before-phase8-20261102.dump` (73 849 bayt, soketten). Tek kullanımlık sunucuya geri yükleme 0; idempotent script iki kez 0; 21 tablonun satır md5'i aynı; ürünlerde version=1. Script: 0 DROP, tek DML `__EFMigrationsHistory` satırı |
+| P8-WEB-1 arayüz | Tamam (sahte API ile) | frontend-dev: lint/typecheck/build 0, test:server 9/9; `(shop)` route group taşıması; 11 admin rotası; proxy guard; gerçek API ile E2E YOK |
+| P8-API-1 backend | **YARIM / bilinmiyor** | backend-dev oturum kapanırken çalışıyordu; çalışma ağacındaki backend değişiklikleri doğrulanmadı |
+
+Devam sırası:
+1. `git status`; backend `dotnet build -c Debug` + tam test (with-test-db yeniden kurulur, hafızaya bak). Eksikse P8-API-1'i yeni backend-dev ile sürdür (brif: sözleşme "API" + "Acceptance matrix", `apps/web/src/lib/admin/types.ts` bağlayıcı şekiller, E2eHost `/fixture/role`, limit mutasyon testi).
+2. frontend-dev: gerçek API ile `tests/e2e/admin*.spec.ts` (1440/768/390, axe, Warehouse kısıtı, CRUD → vitrin fiyatı, stok niyeti, iptal ve stok iadesi), mevcut paketlerin (`(shop)` taşıması) tamamı yeşil.
+3. Bağımsız kapılar: security-auditor (son kod), health-observer (`live-stack.sh` hazırlanır), qa-reviewer (tam regresyon, eşzamanlılık, E2E).
+4. Ana ajan nihai Release koşusu; dev DB'ye migration için kullanıcı onayı (kullanıcı "dev verisini değiştirme" dedi; migration yalnız şema ekler, prova temiz); ROADMAP/ARCHITECTURE/README/CLAUDE.md; Türkçe rapor.
+
+### Faz 8: backend doğrulama noktası (2026-11-07)
+
+**Kapsam: yalnız backend testleri.** Frontend E2E, son güvenlik/sağlık/QA kapıları, dev DB migration'ı, commit/push yapılmadı. Dev DB (5433) kullanılmadı.
+
+| Adım | Sonuç |
+|---|---|
+| `dotnet build -c Debug` | 0 hata, 0 uyarı |
+| Test ortamı | Tek kullanımlık `postgres:17-alpine` (tmpfs), `127.0.0.1:5434`, rastgele parola (dosyaya yazılmadı) |
+| İlk admin koşusu (`Admin*`, `AdminAuditLog`, `AdminOperationsMigration`, `CategoryTreeGuard`, `OrderStatusGuard`) | 417 geçti / **2 kaldı** / 0 atlandı, exit 1 |
+| Düzeltmeden sonra `AdminBusyTests` | 2/2 geçti, exit 0 |
+| Tam paket `dotnet test -c Debug` | **2156 geçti / 0 kaldı / 0 atlandı**, exit 0, 4 dk 32 sn |
+
+**Bulunan hata (2 test):** katalog yazmasında kilit zaman aşımı (55P03) ve gerçek deadlock 503 `busy` yerine 500 dönüyordu (`AdminBusyTests`). Kök neden: `NpgsqlExecutionStrategy`, kullanıcı transaction'ı içindeki `FromSql` okumasında 55P03/40P01'i "geçici hata" sayıp `PostgresException`'ı `InvalidOperationException` içine sarıyor; `TransactionalSql.PostgresOf` yalnız `DbUpdateException` sarmalını açtığından `Busy` eşlemesi tetiklenmiyordu.
+
+**Düzeltme:** `backend/src/SSCommerce.Infrastructure/Common/TransactionalSql.cs` — `PostgresOf` artık iç istisna zincirinin tamamını gezip ilk `PostgresException`'ı döndürür. Aynı yardımcıyı kullanan diğer servisler (sipariş, stok, adres, sepet, personel) de bundan yararlanır; tam paket yeşil. Ayrıca `AdminCatalogService.cs` içinde önceki oturumdan kalan, hiçbir yerden çağrılmayan `Dbg` hata ayıklama metodu (başka bir oturumun scratchpad yoluna dosya yazıyordu) silindi.
+
+**Test edilmeyenler:** Release yapılandırması (son kapıda koşulacak); gerçek API ile E2E; yük/dayanıklılık.
+
+### Faz 8: Admin E2E entegrasyon noktası (2026-11-07)
+
+**Kapsam:** gerçek Next.js + gerçek ASP.NET Core (E2eHost) + izole PostgreSQL (`sscommerce-test-pg`, 5434) ile Admin Playwright testleri ve `(shop)` taşıması sonrası vitrin regresyonu. Dev DB (5433) kullanılmadı, migration uygulanmadı, commit/push yok. Kapılar (security/health/QA) koşmadı.
+
+| Komut (`apps/web`, `SSCOMMERCE_TEST_POSTGRES` ayarlı) | Sonuç |
+|---|---|
+| `npm run lint` | exit 0 |
+| `npm run typecheck` | exit 0 |
+| `npm run test:server` | exit 0, 9 geçti / 0 kaldı / 0 atlandı |
+| `npm run test:e2e` (build dahil, tek tam koşu) | exit 0, **207 geçti / 0 kaldı / 0 atlandı** (47 yeni admin + 160 mevcut vitrin/Faz 7) |
+
+Yeni admin testleri (47): access 12, responsive 6, catalog 9, stock 7, fulfilment 11, limits 2. Yazan spec'ler `playwright.config.ts` içinde seri zincirli 4 yeni projede (admin-catalog → admin-stock → admin-fulfilment → admin-limits; `ordering`'den sonra).
+
+**Frontend düzeltmeleri:** `ProductEditor.tsx` (kayıt iletileri liste yenilenince kayboluyordu), `StockAdmin.tsx` (`stock_limit_exceeded` yanlış "iade yapılamadı" diyordu), `format.ts` (aktör "staff" → "Personel"), `eslint.config.mjs` (`test-results/**` ignore; lint ENOENT).
+
+**Mevcut testte değişiklik:** `orders.spec.ts` "11 siparişte sayfalama" testi F8.5 sınırlarıyla çakışıyordu (11 sipariş > günlük 10); açık sipariş sayısını 3'te tutmak için eski siparişleri fixture ile tamamlıyor. E2E ortamında günlük sınır 11'e çıkarılıyor (`E2E_MAX_ORDERS_PER_DAY`, yalnız E2eHost alt sürecinde); sözleşme varsayılanı 10 değişmedi.
+
+**BACKEND HATASI (düzeltilmedi, yeni kapsamlı görev ister):** `backend/tools/SSCommerce.E2eHost/FixtureControl.cs` `/fixture/role` ucu her çağrıda 500 dönüyor; SQL'de parametre yer tutucuları eksik: satır ~212 `WHERE "NormalizedEmail" = ` (`@email` yok), ~224 `VALUES (, )` (`@user, @role` yok), ~234 `WHERE "Id" = ` (`@user` yok). Yalnız test aracı, üretim kodu etkilenmez. Geçici yol: `admin-support.ts` ucu dener, 500 ise `docker exec sscommerce-test-pg psql` ile aynı INSERT'i ve damga yenilemeyi yapar (yalnız `sscommerce_test_<guid>` DB). Uç düzelince yedek yol kaldırılmalı; düzelene dek bu paket docker CLI'sız ortamda (CI) koşmaz.
+
+**Sınanamayanlar / açık:** `last_admin` E2E'de yok (paylaşılan test DB'sinde başka Admin'ler var; yalnız izole-DB backend testi kurar). `Retry-After` yalnız 1..86400 aralığında kontrol edildi. Warehouse'a teslimat verisi (D-071) sahip kararı bekliyor. Tasarım gözden geçirilmedi (yalnız axe ve taşma). Uzak CI yok (BLOCKED_EXTERNAL).
+
+### Faz 8: nihai doğrulama (2026-11-07)
+
+**Durum: `VERIFIED` (yerel) / `PENDING_DEV_MIGRATION_APPROVAL`.** Commit/push/merge yok (dal `feat/phase-3-4-complete`, HEAD `1f18c35`, hiçbir şey stage edilmedi; kök referans PNG ve `GOAL_PHASE_8_ERP_ADMIN_EN.md` izlenmeyen). `AddAdminOperations` dev veritabanına (5433) uygulanmadı; sahip onayı bekliyor. Aşağıdaki sayılar bu oturumda, düzeltmelerden SONRA, aynı kodda, gerçek PostgreSQL 17 (`sscommerce-test-pg`, 5434) ile alındı.
+
+| Komut | Sonuç |
+|---|---|
+| `dotnet build backend/SSCommerce.slnx -c Release` | exit 0, 0 uyarı, 0 hata |
+| `dotnet test backend/SSCommerce.slnx -c Release` | exit 0, **2195 geçti / 0 kaldı / 0 atlandı** (6 dk 46 sn) |
+| `npm run lint` · `npm run typecheck` (`apps/web`) | exit 0 · exit 0 |
+| `npm run test:server` | exit 0, 10 geçti / 0 kaldı / 0 atlandı |
+| `npm run test:e2e` (build dahil, gerçek Next + API + PostgreSQL) | exit 0, **210 geçti**, atlanan/flaky/kalan 0 (160 vitrin+Faz 7, **50 admin**) |
+| `npm run test:proxy` | exit 0, PASS (sahte XFF gerçek Next → API hız sınırını aşamaz: 400/400/400/429) |
+
+**Bağımsız kapılar**
+- **security-auditor (statik): PASS_WITH_FINDINGS.** Critical/High/Medium yok. Ön incelemenin 3 MUST'ı kodda doğrulandı; rol yönetimi, bootstrap, CSRF, stok iadesi, limitler, fiyat, PII, SQL, fixture sızıntısı temiz. Low: (1) hız sınırı kovası yapılandırmaya bağlı → README'de zorunlu ayar yapıldı; (2) teslimat PII okuması hesap başına değil IP başına sınırlı (denetim izi var); (3) kilitli Admin'in açık cookie'si ≤8 sa; (4) `--bootstrap-admin` yalnız Development+loopback korumalı. Info: `last_admin` yalnız kilitsiz Admin sayar; Admin hesap kimliğiyle e-posta görür (sözleşme); `proxy.ts` `/auth/me` hatasında geçirir (yetki API'de).
+- **health-observer (RUNTIME, kendi DB'si 5436 / API 5091 / web 3300): PASS_WITH_FINDINGS.** DB kapalıyken `/health/live` 200, `/health/ready` 503 (~2 sn, <3 sn), anonim ve girişli Admin istekleri ayrıntısız 503 problem+json + `Retry-After: 5`, yanlış 200 ve yanlış 401 yok. `docker start` sonrası API yeniden başlatılmadan ready ~235 ms'de 200, aynı cookie ile Admin istekleri döndü. Hız sınırı: `WEB_TRUSTED_PROXIES` ayarlıyken istemci başına ayrı kova; boşken kova bağlanan eşe göre (yapılandırma riski). NOT_VERIFIED: tarayıcıda görünen hata metni, migration'lı DB'de soğuk başlangıç süresi, gerçek 500 gövdesi, gerçek uzak istemci/ters proxy, uzun kesinti. Gözlem: kesintide yanıt ~2,1 sn (`/admin` sayfası 4,2 sn).
+- **qa-reviewer: PASS_WITH_FINDINGS.** 1 Medium + 3 Low. **Medium (düzeltildi):** `parseTlToMinor("0.500")` tek nokta + 3 hane girdisini binlik ayracı sayıp 500 TL (1000 kat) kaydediyordu. Önce kırmızı regresyon testi yazıldı (`admin-money.test.mjs`), sonra `money.ts`'de binlik grubu `[1-9]` ile başlamaya zorlandı (yalnız-nokta ve virgül+nokta dalları); `1.299`, `10.500` hâlâ binlik, `0.500/000.100/0.500,00` reddedilir. Düzeltmeden sonra QA yeniden çalıştırılmadı; kanıt test:server 10/10 + tsc + eslint. Low: F8.5 için mutation kanıtı (aşağıda üretildi), XFF otomatik testi yok (elle QA + `test:proxy`), depo hijyeni (PNG/GOAL dosyası stage edilmesin).
+
+**F8.5 mutation kanıtı (lead, bu oturum):** `OrderPlacementService` sepet kilidi `FOR UPDATE` → `FOR SHARE` yapıldı → `OrderLimitRaceTests` iki yarış testi KIRILDI (0 geçti / 2 kaldı: 20 paralel yerleştirme > 3 açık sipariş; paralel günlük sınır aşımı). Dosya yedekten geri yüklendi (md5 aynı), sonra tam Release koşusu yapıldı. Sözleşmenin ikinci mutasyonu ("limit denetimini 4. adımdan önce taşı") koşulmadı.
+
+**Düzeltmeler:** `TransactionalSql.PostgresOf` iç istisna zincirini gezer (D-074; 2 `AdminBusyTests` 500→503); `/fixture/role` SQL yer tutucuları (D-076; +30 `FixtureControlTests`, düzeltme öncesi 8 kırmızı); Docker/psql yedek yolu `admin-support.ts`'ten silindi (`grep docker|psql apps/web/tests` boş), fixture hatası açıkça düşer; `AdminCatalogService.cs`'deki eski `Dbg` kalıntısı silindi; `money.ts` (yukarıda); 3 admin arayüz düzeltmesi (ProductEditor ileti, StockAdmin sınır iletisi, aktör etiketi "Personel"); eklenen testler: last_admin +4, kesin değerli Retry-After +1 (donmuş saat), üretim varsayılanı +4, D-071 Warehouse PII +1, sepet/checkout fiyat +1, RFC 9457 gövde +1.
+
+**Kabul edilen artık riskler:** yukarıdaki 4 Low; `PRODUCTION_ORDERING_POLICY_PENDING` (üretim eşikleri); D-071 sahip kararı (Warehouse teslimat verisi açılmadı); `/admin` için sıkı CSP Faz 9; E2E günlük sınırı yalnız E2eHost alt sürecinde 11 (D-075, üretim varsayılanı 10/3 testle kanıtlı); `last_admin` yalnız izole-DB backend testlerinde (E2E'de paylaşılan DB nedeniyle yok); uzak CI BLOCKED_EXTERNAL; görsel tasarım incelemesi yapılmadı (yalnız axe + taşma).
+
+**Migration hazırlığı (dev DB'ye DOKUNULMADI):** `AddAdminOperations` yalnız ekleyici (Up'ta DROP yok; DROP'lar Down'da; üretilen idempotent betik 1241 satır, `DROP TABLE/COLUMN` 0; `has-pending-model-changes` "No changes"). Dev DB salt okunur durum: 5 migration (`…AddOrdering` sonuncu), ürün 10; taze yedek `%LOCALAPPDATA%\SSCommerce\backups\sscommerce-dev-before-phase8-apply-20261107-175903.dump` (73 849 bayt, 2 Kasım yedeğiyle aynı boyut: veri değişmemiş). Yedek tek kullanımlık sunucuya geri yüklendi (`pg_restore` exit 0, 5 kayıt), idempotent betik iki kez uygulandı (exit 0, 0), 6 migration kaydı, yeni tablo `admin_audit_log`, `products` 10 satır `version=1`; satır özeti yalnız yeni `version` sütunu eklenen 3 tabloda (`categories`, `products`, `product_variants`) ve `__EFMigrationsHistory`'de değişti, beklenen. Tek kullanımlık sunucu silindi.
+
+**Test ortamı durumu:** `sscommerce-test-pg` (5434) ve `sscommerce-postgres-1` (5433) çalışıyor; sağlık ajanının kendi konteyneri ve süreçleri kapatıldı.

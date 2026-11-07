@@ -56,8 +56,28 @@ internal static class TransactionalSql
         return await command.ExecuteScalarAsync(cancellationToken);
     }
 
-    /// <summary>PostgreSQL 55P03 (lock_not_available): kilit bekleme zaman aşımı.</summary>
-    public static bool IsLockTimeout(Exception exception) =>
-        exception is PostgresException { SqlState: PostgresErrorCodes.LockNotAvailable } ||
-        exception is DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.LockNotAvailable } };
+    /// <summary>
+    /// "Meşgul" durumu: PostgreSQL 55P03 (lock_not_available, kilit bekleme zaman aşımı) ya da 40P01 (deadlock_detected). İkisinde de transaction
+    /// geri alınmıştır, hiçbir şey yazılmadı ve istek güvenle tekrar denenebilir (503 busy). Faz 8'den önce yalnız 55P03 sayılırdı.
+    /// </summary>
+    public static bool IsLockTimeout(Exception exception) => PostgresOf(exception) is
+        { SqlState: PostgresErrorCodes.LockNotAvailable or PostgresErrorCodes.DeadlockDetected };
+
+    /// <summary>
+    /// İstisnanın kendisi ya da iç istisna zincirindeki ilk PostgreSQL hatasını döndürür. Zincir gerekli: EF <c>DbUpdateException</c> sarar, ayrıca
+    /// <c>NpgsqlExecutionStrategy</c> 55P03/40P01 gibi "geçici" hataları kullanıcı transaction'ı içinde yeniden denemeyip
+    /// <c>InvalidOperationException("...transient failure")</c> içine sarar (FromSql/okuma sorgularında). Yalnız bir kat açmak 503 busy'yi 500'e düşürürdü.
+    /// </summary>
+    public static PostgresException? PostgresOf(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is PostgresException postgres)
+            {
+                return postgres;
+            }
+        }
+
+        return null;
+    }
 }

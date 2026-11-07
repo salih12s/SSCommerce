@@ -67,10 +67,7 @@ public partial class OrderingMigrationTests
     /// <summary>Katalog, kullanıcı, depo, bakiye, hareket, sepet ve adres verisini (AddCartAndAddresses sürümünde var olan tablolar) kurar.</summary>
     private static async Task SeedExistingDataAsync(PostgresTestDatabase database)
     {
-        await using (var context = database.CreateDbContext())
-        {
-            await new DemoCatalogSeeder(context).SeedAsync(Ct);
-        }
+        await LegacySchemaSeed.SeedDemoCatalogAsync(database, Ct);
 
         var userId = Guid.NewGuid();
         var warehouseId = Guid.NewGuid();
@@ -128,16 +125,17 @@ public partial class OrderingMigrationTests
         Assert.Equal(4, await TableCountAsync(database, OrderTables));
         var history = (await database.ScalarAsync<string>(
             "SELECT string_agg(\"MigrationId\", ',' ORDER BY \"MigrationId\") FROM \"__EFMigrationsHistory\"", Ct))!.Split(',');
-        Assert.Equal(5, history.Length);
+        Assert.Equal(6, history.Length);
         Assert.EndsWith("_AddCartAndAddresses", history[3]);
         Assert.EndsWith("_AddOrdering", history[4]);
+        Assert.EndsWith("_AddAdminOperations", history[5]);
 
         foreach (var table in OrderTables)
         {
             Assert.Equal(0, await database.ScalarAsync<long>($"SELECT count(*) FROM {table}", Ct));
         }
 
-        Assert.Equal(3, await TriggerCountAsync(database, "orders"));
+        Assert.Equal(5, await TriggerCountAsync(database, "orders")); // 3 Faz 7 + Faz 8: durum geçişi ve ilk durum
         Assert.Equal(2, await TriggerCountAsync(database, "order_items"));
         Assert.Equal(2, await TriggerCountAsync(database, "order_inventory_allocations"));
         Assert.Equal(2, await TriggerCountAsync(database, "order_status_history"));
@@ -173,8 +171,10 @@ public partial class OrderingMigrationTests
 
         await using (var context = database.CreateDbContext())
         {
-            var only = Assert.Single(await context.Database.GetPendingMigrationsAsync(Ct));
-            Assert.EndsWith("_AddOrdering", only);
+            var pending = (await context.Database.GetPendingMigrationsAsync(Ct)).ToArray();
+            Assert.Equal(2, pending.Length); // AddOrdering, ardından Faz 8'in AddAdminOperations'ı
+            Assert.EndsWith("_AddOrdering", pending[0]);
+            Assert.EndsWith("_AddAdminOperations", pending[1]);
         }
 
         await MigrateToAsync(database, targetMigration: null);
@@ -201,7 +201,7 @@ public partial class OrderingMigrationTests
             await context.Database.MigrateAsync(Ct);
         }
 
-        Assert.Equal(5, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", Ct));
+        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", Ct));
         Assert.Equal(4, await TableCountAsync(database, OrderTables));
         Assert.Equal(2, await OrderFunctionCountAsync(database));
         Assert.Equal(checksum, await ExistingDataChecksumAsync(database));
@@ -228,7 +228,7 @@ public partial class OrderingMigrationTests
         Assert.Equal(4, await TableCountAsync(database, OrderTables));
         Assert.Equal(2, await OrderFunctionCountAsync(database));
         Assert.Contains("order_cancellation", await OperationTypeCheckAsync(database));
-        Assert.Equal(5, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", Ct));
+        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", Ct));
         Assert.Equal(before, await ExistingDataChecksumAsync(database));
         // Yeniden uygulanan şema çalışıyor: ilk sipariş yine 100001'den başlar.
         var data = new OrderingTestData(database);
@@ -243,6 +243,10 @@ public partial class OrderingMigrationTests
         var data = new OrderingTestData(database);
         var placed = await data.InsertFullOrderAsync();
 
+        // Her migration kendi transaction'ındadır: önce Faz 8 adımı geri alınır (başarılı), sınanan adım AddOrdering'in kendi Down'ıdır.
+        await MigrateToAsync(database, "AddOrdering");
+        Assert.Equal(5, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", Ct));
+
         // Sipariş hareketi (order_placement) eski dar CHECK ile uyumsuzdur: geri alma reddedilir ve tek transaction olarak geri sarılır.
         await Assert.ThrowsAnyAsync<Exception>(() => MigrateToAsync(database, PreviousMigration));
 
@@ -252,7 +256,7 @@ public partial class OrderingMigrationTests
         Assert.Equal(1, await database.ScalarAsync<long>($"SELECT count(*) FROM stock_movements WHERE id = '{placed.MovementId}'", Ct));
         Assert.Equal(5, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", Ct));
         Assert.Equal(2, await OrderFunctionCountAsync(database));
-        Assert.Equal(3, await TriggerCountAsync(database, "orders")); // trigger'lar da geri sarıldı
+        Assert.Equal(3, await TriggerCountAsync(database, "orders")); // trigger'lar da geri sarıldı (Faz 8 trigger'ları zaten kalkmıştı)
         Assert.Contains("order_placement", await OperationTypeCheckAsync(database));
     }
 
@@ -275,8 +279,8 @@ public partial class OrderingMigrationTests
 
         Assert.Equal(4, await TableCountAsync(database, OrderTables));
         Assert.Equal(2, await OrderFunctionCountAsync(database));
-        Assert.Equal(3, await TriggerCountAsync(database, "orders"));
-        Assert.Equal(5, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", Ct));
+        Assert.Equal(5, await TriggerCountAsync(database, "orders"));
+        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", Ct));
         Assert.Equal(before, await ExistingDataChecksumAsync(database));
     }
 
@@ -330,7 +334,7 @@ public partial class OrderingMigrationTests
             """;
 
         var before = await database.ScalarAsync<string>(SchemaFingerprintSql, Ct);
-        await MigrateToAsync(database, targetMigration: null);
+        await MigrateToAsync(database, "AddOrdering"); // AddAdminOperations bilerek version sütunu ekler: AdminOperationsMigrationTests denetler
         Assert.Equal(before, await database.ScalarAsync<string>(SchemaFingerprintSql, Ct));
     }
 
@@ -388,7 +392,8 @@ public partial class OrderingMigrationTests
 
         Assert.Equal(
             "ix_order_inventory_allocations_product_variant_id,ix_order_inventory_allocations_warehouse_id,ix_order_items_product_variant_id," +
-            "ix_order_status_history_actor_user_id,ix_order_status_history_order_id_occurred_at_id,ix_orders_status_created_at_id," +
+            "ix_order_status_history_actor_user_id,ix_order_status_history_occurred_at_id,ix_order_status_history_order_id_occurred_at_id," +
+            "ix_orders_open_created_at,ix_orders_open_user,ix_orders_status_created_at_id," +
             "ix_orders_user_id_created_at_id,pk_order_inventory_allocations,pk_order_items,pk_order_status_history,pk_orders," +
             "ux_order_inventory_allocations_order_item_id_warehouse_id,ux_order_inventory_allocations_placement_movement_id," +
             "ux_order_items_order_id_product_variant_id,ux_orders_order_number,ux_orders_user_id_idempotency_key",
@@ -420,7 +425,8 @@ public partial class OrderingMigrationTests
             "order_inventory_allocations.trg_order_inventory_allocations_no_truncate:0:32,order_inventory_allocations.trg_order_inventory_allocations_no_update_delete:1:0," +
             "order_items.trg_order_items_no_truncate:0:32,order_items.trg_order_items_no_update_delete:1:0," +
             "order_status_history.trg_order_status_history_no_truncate:0:32,order_status_history.trg_order_status_history_no_update_delete:1:0," +
-            "orders.trg_orders_no_delete:1:0,orders.trg_orders_no_truncate:0:32,orders.trg_orders_restrict_update:1:0",
+            "orders.trg_orders_insert_placed:1:0,orders.trg_orders_no_delete:1:0,orders.trg_orders_no_truncate:0:32,orders.trg_orders_restrict_update:1:0," +
+            "orders.trg_orders_status_transition:1:0",
             triggers);
 
         // Adrese FK yok, yalnız snapshot sütunları.

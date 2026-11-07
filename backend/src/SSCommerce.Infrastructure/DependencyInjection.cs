@@ -4,12 +4,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SSCommerce.Application.Addresses;
+using SSCommerce.Application.Administration;
 using SSCommerce.Application.Carts;
 using SSCommerce.Application.Catalog;
 using SSCommerce.Application.Checkout;
 using SSCommerce.Application.Inventory;
 using SSCommerce.Application.Orders;
 using SSCommerce.Infrastructure.Addresses;
+using SSCommerce.Infrastructure.Administration;
 using SSCommerce.Infrastructure.Carts;
 using SSCommerce.Infrastructure.Catalog;
 using SSCommerce.Infrastructure.Checkout;
@@ -69,6 +71,21 @@ public static class DependencyInjection
         services.AddScoped<IOrderPlacementService, OrderPlacementService>();
         services.AddScoped<IOrderStatusService, OrderStatusService>();
         services.AddScoped<IOrderQueries, OrderQueries>();
+        services.AddScoped<IDeliveryViewService, DeliveryViewService>();
+
+        // Ödenmemiş sipariş sınırları (Faz 8, F8.5): açılışta 1..1000 doğrulanır, geçersizse uygulama AÇILMAZ.
+        services.AddOptions<OrderLimitOptions>()
+            .BindConfiguration(OrderLimitOptions.SectionName)
+            .Validate(options => options.Validate() is null, "Ordering:MaxOpenOrdersPerUser ve Ordering:MaxOrdersPerRollingDay 1 ile 1000 arasında olmalıdır.")
+            .ValidateOnStart();
+
+        // Yönetim (Faz 8): katalog yazma/okuma, pano ve raporlar, personel rolleri. Hepsi istek başına.
+        services.AddScoped<AdminCatalogQueries>();
+        services.AddScoped<IAdminCatalogQueries>(provider => provider.GetRequiredService<AdminCatalogQueries>());
+        services.AddScoped<IAdminCatalogService, AdminCatalogService>();
+        services.AddScoped<IDashboardQueries, DashboardQueries>();
+        services.AddScoped<IStaffQueries, StaffQueries>();
+        services.AddScoped<IStaffRoleService, StaffRoleService>();
 
         // Identity çekirdeği (D-032): kullanıcı/rol yönetimi. Cookie şeması ve politikalar Api'de.
         services.AddIdentityServices();

@@ -25,7 +25,7 @@ public sealed class Product : AuditedEntity
         Slug = CatalogRules.RequireSlug(slug, CatalogRules.ProductSlugMaxLength, "Ürün slug");
         Brand = CatalogRules.OptionalText(brand, CatalogRules.BrandMaxLength, "Marka");
         Description = CatalogRules.OptionalText(description, CatalogRules.DescriptionMaxLength, "Açıklama");
-        Specifications = ValidateSpecifications(specifications);
+        Specifications = NormalizeSpecifications(specifications);
         IsDemo = isDemo;
         IsActive = true;
     }
@@ -49,6 +49,15 @@ public sealed class Product : AuditedEntity
     public bool IsDemo { get; private set; }
 
     public bool IsActive { get; private set; }
+
+    /// <summary>
+    /// Yazma sürümü (Faz 8, D-068). Yeni satır 1'den başlar; her gerçek değişiklikte tam 1 artar. İyimser eşzamanlılık belirteci DEĞİLDİR:
+    /// kontrol, kilitli satırdan okunan sürümle "kilitle + karşılaştır" biçiminde yapılır (docs/CONTRACT_PHASE_8.md).
+    /// </summary>
+    public int Version { get; private set; } = 1;
+
+    /// <summary>Sürümü tam 1 artırır. Hiçbir şeyi değiştirmeyen yazma çağırmaz.</summary>
+    public void BumpVersion() => Version = checked(Version + 1);
 
     public IReadOnlyCollection<ProductVariant> Variants => _variants;
 
@@ -81,7 +90,30 @@ public sealed class Product : AuditedEntity
 
     public void SetActive(bool isActive) => IsActive = isActive;
 
-    private static SortedDictionary<string, string>? ValidateSpecifications(IReadOnlyDictionary<string, string>? specifications)
+    /// <summary>Adı değiştirir (slug değişmez: siparişler ve bağlantılar ona dayanır). Kurallar kurucuyla aynıdır.</summary>
+    public void Rename(string name) => Name = CatalogRules.RequireText(name, CatalogRules.ProductNameMaxLength, "Ürün adı");
+
+    public void SetBrand(string? brand) => Brand = CatalogRules.OptionalText(brand, CatalogRules.BrandMaxLength, "Marka");
+
+    public void SetDescription(string? description) =>
+        Description = CatalogRules.OptionalText(description, CatalogRules.DescriptionMaxLength, "Açıklama");
+
+    public void SetSpecifications(IReadOnlyDictionary<string, string>? specifications) =>
+        Specifications = NormalizeSpecifications(specifications);
+
+    /// <summary>Başka kategoriye taşır. Kategorinin varlığını veritabanı FK'si ve servis denetler.</summary>
+    public void MoveToCategory(Guid categoryId)
+    {
+        if (categoryId == Guid.Empty)
+        {
+            throw new CatalogRuleException("Kategori zorunlu.");
+        }
+
+        CategoryId = categoryId;
+    }
+
+    /// <summary>Teknik özellik tablosunu doğrular ve kararlı (ordinal sıralı) biçime çevirir; boş tablo null olur.</summary>
+    public static SortedDictionary<string, string>? NormalizeSpecifications(IReadOnlyDictionary<string, string>? specifications)
     {
         if (specifications is null || specifications.Count == 0)
         {

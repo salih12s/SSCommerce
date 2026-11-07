@@ -26,6 +26,9 @@ public class OrderSecurityTests(InventoryApiFixture fixture)
         ("cancel", "POST", "/api/v1/orders/5b0c1d6e-7a34-4f0e-9c1a-2d8f6e3b0a01/cancel", null),
         ("staff list", "GET", "/api/v1/admin/orders", null),
         ("staff status", "POST", "/api/v1/admin/orders/5b0c1d6e-7a34-4f0e-9c1a-2d8f6e3b0a01/status", """{"status":"processing"}"""),
+        // Faz 8: personel detayı (WarehouseOrAdmin) ve Admin-only teslimat görünümü (POST).
+        ("staff detail", "GET", "/api/v1/admin/orders/5b0c1d6e-7a34-4f0e-9c1a-2d8f6e3b0a01", null),
+        ("delivery view", "POST", "/api/v1/admin/orders/5b0c1d6e-7a34-4f0e-9c1a-2d8f6e3b0a01/delivery-view", null),
     ];
 
     private static Task<HttpResponseMessage> Send(ApiClient client, (string Name, string Method, string Url, string? Body) route, bool csrf = true, string? origin = null) =>

@@ -31,8 +31,10 @@ public static class OrderEndpoints
             .WithDescription(
                 "Idempotency-Key: ^[A-Za-z0-9_-]{16,128}$ (kullanıcı başına tektir). İlk başarı 201; aynı anahtar + aynı içerik 200 (replayed:true, hiçbir şey yazılmaz); " +
                 "aynı anahtar + farklı içerik 409 idempotency_key_reused. Gövde: { addressId, quote }; fiyat/adet/durum sunucudan gelir, fazla alanlar yok sayılır. " +
-                "Hatalar: 404 address_not_found; 409 cart_empty, cart_total_too_large, order_item_inactive (itemIds), order_quote_changed, insufficient_stock (itemIds); " +
-                "503 busy (hiçbir şey yazılmadı, aynı anahtarla tekrar denenir). Reddedilen istek anahtarı tüketmez.")
+                "Hatalar: 404 address_not_found; 409 cart_empty, cart_total_too_large, order_item_inactive (itemIds), order_quote_changed, insufficient_stock (itemIds), " +
+                "open_order_limit (limit; açık placed+processing sipariş sayısı üst sınırda); 429 order_daily_limit (limit + Retry-After; son 24 saatte durumdan bağımsız sipariş sayısı üst sınırda, " +
+                "IP hız sınırlayıcının rate_limited kodundan ayrıdır); " +
+                "503 busy (hiçbir şey yazılmadı, aynı anahtarla tekrar denenir). Reddedilen istek anahtarı tüketmez; replay'ler (200) sınıra sayılmaz.")
             .Accepts<PlaceOrderRequest>("application/json")
             .RequireRateLimiting(RateLimitPolicies.Mutation)
             .Produces<OrderDto>(StatusCodes.Status201Created)
@@ -74,10 +76,18 @@ public static class OrderEndpoints
 
         staff.MapGet(string.Empty, StaffList)
             .WithName("ListOrdersForStaff")
-            .WithSummary("Personel sipariş listesi (status süzgeci). KİŞİSEL VERİ YOKTUR: müşteri, adres, telefon dönmez.")
+            .WithSummary("Personel sipariş listesi (status süzgeci ya da open=true: placed+processing, en eski önce). KİŞİSEL VERİ YOKTUR: müşteri, adres, telefon dönmez.")
             .Produces<PagedDto<AdminOrderSummaryDto>>(StatusCodes.Status200OK)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden);
+
+        staff.MapGet("/{id}", StaffGet)
+            .WithName("GetOrderForStaff")
+            .WithSummary("Personel sipariş detayı: kalemler, durum geçmişi ve stok dağıtımları (allocations: sku, warehouseCode, quantity). KİŞİSEL VERİ YOKTUR.")
+            .Produces<AdminOrderDto>(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
         staff.MapPost("/{id}/status", StaffStatus)
             .WithName("ChangeOrderStatus")
@@ -96,6 +106,43 @@ public static class OrderEndpoints
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         return api;
+    }
+
+    /// <summary>
+    /// Teslimat görünümü (Faz 8): POST, AdminOnly. <c>/api/v1/admin</c> AdminOnly grubuna kaydedilir (Warehouse için 403): okuma denetim izi yazar, GET hiçbir şey yazmaz.
+    /// </summary>
+    public static IEndpointRouteBuilder MapDeliveryViewEndpoint(this IEndpointRouteBuilder admin)
+    {
+        admin.MapPost("/orders/{id}/delivery-view", DeliveryView)
+            .WithTags("Admin Orders")
+            .WithName("ViewOrderDelivery")
+            .WithSummary("Admin siparişin teslimat bilgisini görür (alıcı, telefon, adres). POST: okuma order.delivery_view denetim satırı yazar (kişisel veri içermez).")
+            .WithDescription("Yalnız Admin; Warehouse 403. Yanıt no-store; listelerde, URL'de ve logda asla. Hatalar: 404 order_not_found; 503 busy.")
+            .RequireRateLimiting(RateLimitPolicies.Mutation)
+            .Produces<DeliveryViewDto>(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
+        return admin;
+    }
+
+    private static async Task<IResult> DeliveryView(string id, ClaimsPrincipal user, IDeliveryViewService deliveries, CancellationToken cancellationToken)
+    {
+        var (orderId, errors) = OrderRequestValidator.ValidateOrderId(id);
+        if (orderId is not { } valid)
+        {
+            return ApiResults.ValidationFailed(errors!);
+        }
+
+        var result = await deliveries.ViewAsync(user.GetUserId(), valid, cancellationToken);
+        return result.Status switch
+        {
+            DeliveryViewStatus.Viewed => Results.Ok(result.Delivery),
+            DeliveryViewStatus.NotFound => OrderNotFound(),
+            _ => ApiResults.Problem(StatusCodes.Status503ServiceUnavailable, "Sistem meşgul, lütfen tekrar deneyin", ApiErrorCodes.Busy),
+        };
     }
 
     private static async Task<IResult> Place(
@@ -161,12 +208,25 @@ public static class OrderEndpoints
         CancellationToken cancellationToken,
         string? status = null,
         string? page = null,
-        string? pageSize = null)
+        string? pageSize = null,
+        string? open = null)
     {
-        var validation = OrderRequestValidator.ValidateAdminList(status, page, pageSize);
+        var validation = OrderRequestValidator.ValidateAdminList(status, page, pageSize, open);
         return validation.IsValid
             ? Results.Ok(await queries.ListForStaffAsync(validation.Value!, cancellationToken))
             : ApiResults.ValidationFailed(validation.Errors);
+    }
+
+    private static async Task<IResult> StaffGet(string id, IOrderQueries queries, CancellationToken cancellationToken)
+    {
+        var (orderId, errors) = OrderRequestValidator.ValidateOrderId(id);
+        if (orderId is not { } valid)
+        {
+            return ApiResults.ValidationFailed(errors!);
+        }
+
+        var order = await queries.GetForStaffAsync(valid, cancellationToken);
+        return order is null ? OrderNotFound() : Results.Ok(order);
     }
 
     private static async Task<IResult> StaffStatus(
@@ -232,10 +292,32 @@ public static class OrderEndpoints
             StatusCodes.Status403Forbidden, "Bu işlem için yetkiniz yok", ApiErrorCodes.Forbidden),
         OrderOperationStatus.StockLimitExceeded => ApiResults.Problem(
             StatusCodes.Status409Conflict, "Stok iadesi üst sınırı aşardı; sipariş değişmedi", ApiErrorCodes.StockLimitExceeded),
+        OrderOperationStatus.OpenOrderLimit => ApiResults.Problem(
+            StatusCodes.Status409Conflict,
+            "Açık sipariş sınırına ulaştınız; yeni sipariş vermeden önce bir açık siparişinizi iptal edin ya da tamamlanmasını bekleyin",
+            ApiErrorCodes.OpenOrderLimit,
+            new Dictionary<string, object?> { ["limit"] = result.Limit }),
+        OrderOperationStatus.DailyOrderLimit => new RetryAfterResult(
+            ApiResults.Problem(
+                StatusCodes.Status429TooManyRequests,
+                "Son 24 saatte verilebilecek sipariş sınırına ulaştınız; lütfen daha sonra tekrar deneyin",
+                ApiErrorCodes.OrderDailyLimit,
+                new Dictionary<string, object?> { ["limit"] = result.Limit }),
+            result.RetryAfterSeconds ?? OrderLimitMath.MaxRetryAfterSeconds),
         OrderOperationStatus.Busy => ApiResults.Problem(
             StatusCodes.Status503ServiceUnavailable, "Sistem meşgul, lütfen aynı anahtarla tekrar deneyin", ApiErrorCodes.Busy),
         _ => throw new InvalidOperationException("Bilinmeyen sipariş işlem durumu."),
     };
+
+    /// <summary>İç sonucu yazmadan önce <c>Retry-After</c> başlığını ekler (tam sayı saniye). IP rate limiter'ın <c>rate_limited</c> yanıtından AYRIDIR.</summary>
+    private sealed class RetryAfterResult(IResult inner, int seconds) : IResult
+    {
+        public Task ExecuteAsync(HttpContext httpContext)
+        {
+            httpContext.Response.Headers.RetryAfter = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return inner.ExecuteAsync(httpContext);
+        }
+    }
 
     private static Dictionary<string, object?> ItemIds(OrderOperationResult result) =>
         new() { ["itemIds"] = result.ItemIds ?? [] };

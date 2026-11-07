@@ -1,9 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, DM_Mono, Instrument_Sans } from "next/font/google";
-import { Suspense } from "react";
-import { BottomNav } from "@/components/BottomNav";
-import { Footer } from "@/components/Footer";
-import { Header } from "@/components/Header";
 import "./globals.css";
 
 const bricolage = Bricolage_Grotesque({
@@ -49,12 +45,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         >
           Ana içeriğe geç
         </a>
-        <Header />
-        <main id="icerik" tabIndex={-1} className="flex-1 outline-none">
-          {children}
-        </main>
-        <Suspense fallback={null}><Footer /></Suspense>
-        <Suspense fallback={null}><BottomNav /></Suspense>
+        {children}
       </body>
     </html>
   );

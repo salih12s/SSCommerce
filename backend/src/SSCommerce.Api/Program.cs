@@ -10,12 +10,13 @@ using SSCommerce.Api.OpenApi;
 using SSCommerce.Api.Orders;
 using SSCommerce.Api.Security;
 using SSCommerce.Infrastructure;
+using SSCommerce.Infrastructure.Administration;
 using SSCommerce.Infrastructure.Persistence.Seed;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Seed komutunda EF SQL günlüğü gürültüsü olmasın.
-if (args.Contains(DemoCatalogSeedCommand.Flag))
+// Seed ve ilk-Admin komutlarında EF SQL günlüğü gürültüsü olmasın (ve komut girdisi/sonucu günlüğe karışmasın).
+if (args.Contains(DemoCatalogSeedCommand.Flag) || args.Contains(BootstrapAdminCommand.Flag))
 {
     // Taze veritabanında "__EFMigrationsHistory yok" sorgu hatası da beklenen durumdur (bekleyen migration denetimi).
     builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.None);
@@ -59,6 +60,12 @@ api.MapOrderEndpoints();
 if (args.Contains(DemoCatalogSeedCommand.Flag))
 {
     return await DemoCatalogSeedCommand.RunAsync(app.Services, app.Environment, Console.Out, Console.Error);
+}
+
+// Geliştirme komutu (Faz 8, D-070): İLK Admin'i atar; sunucuyu başlatmaz. E-posta stdin'den iki kez okunur, yankılanmaz, loglanmaz. HTTP ucu DEĞİLDİR.
+if (args.Contains(BootstrapAdminCommand.Flag))
+{
+    return await BootstrapAdminCommand.RunAsync(app.Services, app.Environment, Console.In, Console.Out, Console.Error);
 }
 
 app.Run();

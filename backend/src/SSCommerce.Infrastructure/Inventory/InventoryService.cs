@@ -3,7 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using SSCommerce.Application.Inventory;
+using SSCommerce.Domain.Administration;
 using SSCommerce.Domain.Inventory;
+using SSCommerce.Infrastructure.Administration;
+using SSCommerce.Infrastructure.Common;
 using SSCommerce.Infrastructure.Persistence;
 
 namespace SSCommerce.Infrastructure.Inventory;
@@ -232,43 +235,83 @@ internal sealed class InventoryService(SSCommerceDbContext db, TimeProvider cloc
         return command;
     }
 
-    public async Task<WarehouseWriteResult> CreateWarehouseAsync(NewWarehouse warehouse, CancellationToken cancellationToken)
+    /// <summary>Depo + <c>warehouse.create</c> denetim satırı TEK transaction'da (Faz 8). Kod tekrarı unique indeksle belirlenir.</summary>
+    public async Task<WarehouseWriteResult> CreateWarehouseAsync(Guid actorUserId, NewWarehouse warehouse, CancellationToken cancellationToken)
     {
         var entity = new Warehouse(warehouse.Code, warehouse.Name);
-        db.Warehouses.Add(entity);
         try
         {
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+            await TransactionalSql.ExecuteAsync(db, transaction, TransactionalSql.LockTimeoutSql, cancellationToken);
+            db.Warehouses.Add(entity);
+            AdminAudit.Add(db, clock, actorUserId, "warehouse.create", AdminAuditRules.TargetWarehouse, entity.Id, new
+            {
+                code = entity.Code,
+                name = entity.Name,
+                isActive = entity.IsActive,
+            });
             await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             return new WarehouseWriteResult(WarehouseWriteStatus.CodeTaken, null);
         }
+        catch (Exception exception) when (TransactionalSql.IsLockTimeout(exception))
+        {
+            return new WarehouseWriteResult(WarehouseWriteStatus.Busy, null);
+        }
 
         return new WarehouseWriteResult(WarehouseWriteStatus.Created, ToDto(entity));
     }
 
-    public async Task<WarehouseWriteResult> UpdateWarehouseAsync(Guid id, WarehouseChange change, CancellationToken cancellationToken)
+    /// <summary>
+    /// Depo satırı <c>FOR UPDATE</c> ile kilitlenir (stok işlemi depoyu <c>FOR SHARE</c> okur; bu UPDATE onların commit'ini bekler ve tersi: pasifleştirme
+    /// yarışı olmaz). Eski değerler kilitli satırdandır; yalnız gerçekten değişen alan varsa denetim satırı yazılır.
+    /// </summary>
+    public async Task<WarehouseWriteResult> UpdateWarehouseAsync(Guid actorUserId, Guid id, WarehouseChange change, CancellationToken cancellationToken)
     {
-        var entity = await db.Warehouses.FirstOrDefaultAsync(w => w.Id == id, cancellationToken);
-        if (entity is null)
+        try
         {
-            return new WarehouseWriteResult(WarehouseWriteStatus.NotFound, null);
-        }
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+            await TransactionalSql.ExecuteAsync(db, transaction, TransactionalSql.LockTimeoutSql, cancellationToken);
+            var entity = (await db.Warehouses
+                .FromSqlInterpolated($"SELECT * FROM warehouses WHERE id = {id} FOR UPDATE")
+                .ToListAsync(cancellationToken)).SingleOrDefault();
+            if (entity is null)
+            {
+                return new WarehouseWriteResult(WarehouseWriteStatus.NotFound, null);
+            }
 
-        if (change.Name is not null)
+            var oldValues = new Dictionary<string, object?>();
+            var newValues = new Dictionary<string, object?>();
+            if (change.Name is not null && change.Name != entity.Name)
+            {
+                oldValues["name"] = entity.Name;
+                newValues["name"] = change.Name;
+                entity.Rename(change.Name);
+            }
+
+            if (change.IsActive is { } isActive && isActive != entity.IsActive)
+            {
+                oldValues["isActive"] = entity.IsActive;
+                newValues["isActive"] = isActive;
+                entity.SetActive(isActive);
+            }
+
+            if (newValues.Count > 0)
+            {
+                AdminAudit.Add(db, clock, actorUserId, "warehouse.update", AdminAuditRules.TargetWarehouse, id, new { old = oldValues, @new = newValues });
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+            return new WarehouseWriteResult(WarehouseWriteStatus.Updated, ToDto(entity));
+        }
+        catch (Exception exception) when (TransactionalSql.IsLockTimeout(exception))
         {
-            entity.Rename(change.Name);
+            return new WarehouseWriteResult(WarehouseWriteStatus.Busy, null);
         }
-
-        if (change.IsActive is { } isActive)
-        {
-            entity.SetActive(isActive);
-        }
-
-        // Stok işlemi depoyu FOR SHARE okur; bu UPDATE onların commit'ini bekler (ve tersi), pasifleştirme yarışı olmaz.
-        await db.SaveChangesAsync(cancellationToken);
-        return new WarehouseWriteResult(WarehouseWriteStatus.Updated, ToDto(entity));
     }
 
     internal static WarehouseDto ToDto(Warehouse warehouse) =>
@@ -288,9 +331,8 @@ internal sealed class InventoryService(SSCommerceDbContext db, TimeProvider cloc
         movement.ActorUserId,
         replayed);
 
-    private static bool IsLockTimeout(Exception exception) =>
-        exception is PostgresException { SqlState: PostgresErrorCodes.LockNotAvailable } ||
-        exception is DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.LockNotAvailable } };
+    /// <summary>Kilit zaman aşımı (55P03) ya da deadlock (40P01): hiçbir şey yazılmadı, güvenle tekrar denenebilir.</summary>
+    private static bool IsLockTimeout(Exception exception) => TransactionalSql.IsLockTimeout(exception);
 
     private sealed record ExistingMovement(StockMovementDto Movement, string Fingerprint);
 

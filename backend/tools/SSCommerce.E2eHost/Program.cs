@@ -218,6 +218,18 @@ internal static partial class Program
         start.Environment["Security__RateLimit__MutationPermitLimit"] = "100000";
         start.Environment["Security__RateLimit__WindowSeconds"] = "60";
 
+        // Ödenmemiş sipariş sınırları (Faz 8, F8.5): E2E API'de ÜRÜN VARSAYILANLARI (3 açık / 24 saatte 10) geçerlidir. Tek istisna ortam değişkenidir:
+        // E2E_MAX_OPEN_ORDERS ve E2E_MAX_ORDERS_PER_DAY verilirse (1..1000) yalnız bu alt süreçte uygulanır. Gerekçe: orders.spec.ts "11 siparişte sayfalama" testi
+        // tek kullanıcıyla 11 sipariş verir; o koşu için sınırlar yükseltilir, sınırı gerçekten sınayan testler varsayılanlarla koşar.
+        foreach (var (variable, setting) in new[] { ("E2E_MAX_OPEN_ORDERS", "Ordering__MaxOpenOrdersPerUser"), ("E2E_MAX_ORDERS_PER_DAY", "Ordering__MaxOrdersPerRollingDay") })
+        {
+            var value = Environment.GetEnvironmentVariable(variable);
+            if (int.TryParse(value, out var parsed) && parsed is >= 1 and <= 1000)
+            {
+                start.Environment[setting] = parsed.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+        }
+
         var process = Process.Start(start) ?? throw new InvalidOperationException("API process did not start.");
         process.OutputDataReceived += (_, _) => { };
         process.ErrorDataReceived += (_, _) => { };

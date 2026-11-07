@@ -1,3 +1,5 @@
+import { clearStockIntents } from "./admin/stock-intent";
+
 export type Account = { id: string; email: string; emailConfirmed: boolean; roles: string[]; capabilities: { admin: boolean; warehouse: boolean } };
 type Problem = { title?: string; code?: string; errors?: Record<string, string[]> };
 export type AuthResult<T> = { ok: true; data: T } | { ok: false; status: number; message: string; errors: Record<string, string[]> };
@@ -35,6 +37,8 @@ export async function authMutation<T>(action: "register" | "login" | "logout", b
       const problem = await readProblem(response);
       return { ok: false, status: response.status, message: message(response.status, problem, action), errors: problem.errors ?? {} };
     }
+    // Çıkışta yönetim alanının tarayıcıdaki izi silinir (stok niyeti); bellekteki yönetim verisi sayfa değişince zaten gider.
+    if (action === "logout") clearStockIntents();
     // The next mutation always obtains a fresh token for the current identity.
     return { ok: true, data: response.status === 204 ? undefined as T : await response.json() as T };
   } catch { return { ok: false, status: 0, message: "Sunucuya bağlanılamadı.", errors: {} }; }

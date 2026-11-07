@@ -2,6 +2,7 @@ using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using SSCommerce.Application.Carts;
 using SSCommerce.Application.Orders;
@@ -21,6 +22,9 @@ namespace SSCommerce.Infrastructure.Orders;
 /// Kilit commit/rollback'te kendiliğinden düşer. Anahtar HİÇBİR ZAMAN <c>user_id</c> olmadan aranmaz: başka kullanıcının siparişi sızmaz.</item>
 /// <item>Anahtar daha önce işlendiyse parmak izi karşılaştırılır: aynı => ilk siparişin şimdiki hali (replay, yazma yok), farklı => <see cref="OrderOperationStatus.KeyReused"/>.</item>
 /// <item><c>carts … FOR UPDATE</c> (KULLANICI KİLİDİ): aynı kullanıcının sepet yazmaları ve diğer siparişleri commit'e kadar bekler.</item>
+/// <item>4a (Faz 8): ödenmemiş sipariş sınırları, kullanıcı kilidi ALTINDA kilitsiz okumalarla: açık (placed + processing) sipariş sayısı
+/// <c>Ordering:MaxOpenOrdersPerUser</c> (varsayılan 3) ve son 24 saatteki sipariş sayısı <c>Ordering:MaxOrdersPerRollingDay</c> (varsayılan 10, durumdan bağımsız).
+/// Replay'ler 3. adımda döner ve ASLA sayılmaz; sınır reddi geri alınır. Kilit sırası değişmedi. Sınır kodları: 409 <c>open_order_limit</c>, 429 <c>order_daily_limit</c>.</item>
 /// <item>Adres <c>(id, user_id)</c> ile okunur: başkasının adresi "yok" ile aynıdır.</item>
 /// <item>Sepet satırları varyant/ürün/kategori ile <c>ORDER BY v.id FOR SHARE OF v, p, c</c>: eşzamanlı fiyat ya da aktiflik güncellemesi bu transaction
 /// bitene kadar BEKLER; doğrulanan fiyat commit anındaki fiyattır.</item>
@@ -40,9 +44,15 @@ internal sealed class OrderPlacementService(
     SSCommerceDbContext db,
     OrderReader reader,
     TimeProvider clock,
+    IOptions<OrderLimitOptions> limits,
     ILogger<OrderPlacementService> logger) : IOrderPlacementService
 {
-    private sealed record Outcome(OrderOperationStatus Status, Guid? OrderId = null, IReadOnlyList<Guid>? ItemIds = null);
+    private sealed record Outcome(
+        OrderOperationStatus Status,
+        Guid? OrderId = null,
+        IReadOnlyList<Guid>? ItemIds = null,
+        int? Limit = null,
+        int? RetryAfterSeconds = null);
 
     private sealed record LineRow(
         Guid ItemId,
@@ -99,7 +109,7 @@ internal sealed class OrderPlacementService(
 
                 return new OrderOperationResult(outcome.Status, order);
             default:
-                return new OrderOperationResult(outcome.Status, ItemIds: outcome.ItemIds);
+                return new OrderOperationResult(outcome.Status, ItemIds: outcome.ItemIds, Limit: outcome.Limit, RetryAfterSeconds: outcome.RetryAfterSeconds);
         }
     }
 
@@ -136,6 +146,17 @@ internal sealed class OrderPlacementService(
                 db, transaction, "SELECT id FROM carts WHERE user_id = @user FOR UPDATE", cancellationToken, ("user", command.UserId)) is not Guid cartId)
         {
             return new Outcome(OrderOperationStatus.CartEmpty);
+        }
+
+        // 4a) Ödenmemiş sipariş sınırları (Faz 8, F8.5). Kullanıcı kilidi (sepet satırı FOR UPDATE) ALTINDA, kilitsiz okumalarla: aynı kullanıcının bütün
+        // siparişleri bu kilidi tutarak sayar ve ekler, bu yüzden farklı anahtarlı iki istek "2 açık" görüp ikisi de geçemez. Yeni kilit YOKTUR (kilit grafiği
+        // değişmedi, yeni deadlock kenarı yok). İptal ve ileri geçişler yalnız açık sayısını düşürür, kilit gerektirmez. Reddedilen istek geri alınır:
+        // anahtar, stok, sepet ve geçmiş değişmez. Durum listeleri SQL SABİTİDİR (kısmi indeks ix_orders_open_user seçilsin).
+        var now = clock.GetUtcNow();
+        var limitOutcome = await CheckLimitsAsync(transaction, command.UserId, now, cancellationToken);
+        if (limitOutcome is not null)
+        {
+            return limitOutcome;
         }
 
         // 5) Adres, sahibiyle birlikte. Başkasının adresi ile olmayan adres aynı sonucu verir.
@@ -210,8 +231,6 @@ internal sealed class OrderPlacementService(
         {
             return new Outcome(OrderOperationStatus.InsufficientStock, ItemIds: shortItems);
         }
-
-        var now = clock.GetUtcNow();
 
         // 10) Koşullu düşüm. Kilit altında ulaşılamaz; yine de 0 satır => hiçbir şey yazılmasın.
         var onHandAfter = new Dictionary<Allocation, int>();
@@ -298,6 +317,52 @@ internal sealed class OrderPlacementService(
             db, transaction, "UPDATE carts SET updated_at = @now WHERE id = @id", cancellationToken, ("now", now), ("id", cartId));
 
         return new Outcome(OrderOperationStatus.Placed, order.Id);
+    }
+
+    /// <summary>
+    /// Açık sipariş sayısı ve kayan 24 saatlik sipariş sayısı. Sınır doluysa ilgili sonuç, değilse null. Açık sayım önce (409), günlük sayım sonra (429).
+    /// Günlük pencere durumdan bağımsızdır (iptal edip yeniden verme döngüsü de sayılır); <c>now</c> siparişin <c>created_at</c> damgasını veren aynı
+    /// <see cref="TimeProvider"/>'dan gelir. <c>Retry-After</c>: bkz. <see cref="OrderLimitMath.RetryAfterSeconds"/>.
+    /// </summary>
+    private async Task<Outcome?> CheckLimitsAsync(IDbContextTransaction transaction, Guid userId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var options = limits.Value;
+
+        var open = await TransactionalSql.ScalarAsync(
+            db,
+            transaction,
+            "SELECT count(*) FROM orders WHERE user_id = @user AND status IN ('placed', 'processing')",
+            cancellationToken,
+            ("user", userId));
+        if (open is long openCount && openCount >= options.MaxOpenOrdersPerUser)
+        {
+            return new Outcome(OrderOperationStatus.OpenOrderLimit, Limit: options.MaxOpenOrdersPerUser);
+        }
+
+        var recent = new List<DateTimeOffset>();
+        await using (var sql = TransactionalSql.Create(
+                         db,
+                         transaction,
+                         "SELECT created_at FROM orders WHERE user_id = @user AND created_at > @since ORDER BY created_at"))
+        {
+            sql.Parameters.AddWithValue("user", userId);
+            sql.Parameters.AddWithValue("since", now - OrderLimitMath.Window);
+            await using var rows = await sql.ExecuteReaderAsync(cancellationToken);
+            while (await rows.ReadAsync(cancellationToken))
+            {
+                recent.Add(rows.GetFieldValue<DateTimeOffset>(0));
+            }
+        }
+
+        if (recent.Count >= options.MaxOrdersPerRollingDay)
+        {
+            return new Outcome(
+                OrderOperationStatus.DailyOrderLimit,
+                Limit: options.MaxOrdersPerRollingDay,
+                RetryAfterSeconds: OrderLimitMath.RetryAfterSeconds(recent, options.MaxOrdersPerRollingDay, now));
+        }
+
+        return null;
     }
 
     private async Task<List<LineRow>> ReadLinesAsync(IDbContextTransaction transaction, Guid cartId, CancellationToken cancellationToken)
