@@ -276,6 +276,7 @@ public class CookieAndPolicyTests(AuthApiFixture fixture)
         Assert.Equal(["post"], Methods(paths, "/api/v1/auth/login"));
         Assert.Equal(["post"], Methods(paths, "/api/v1/auth/logout"));
         Assert.Equal(["get"], Methods(paths, "/api/v1/auth/me"));
+        Assert.Equal(["post"], Methods(paths, "/api/v1/auth/password"));
         Assert.Equal(["get"], Methods(paths, "/api/v1/admin/me"));
 
         var register = paths.GetProperty("/api/v1/auth/register").GetProperty("post");
@@ -287,9 +288,10 @@ public class CookieAndPolicyTests(AuthApiFixture fixture)
         Assert.True(paths.GetProperty("/api/v1/auth/logout").GetProperty("post").GetProperty("responses").TryGetProperty("204", out _));
 
         var schemas = json.RootElement.GetProperty("components").GetProperty("schemas");
-        Assert.Equal(["capabilities", "email", "emailConfirmed", "id", "roles"], Props(schemas, "AccountDto"));
+        Assert.Equal(["capabilities", "createdAt", "email", "emailConfirmed", "id", "roles"], Props(schemas, "AccountDto"));
         Assert.Equal(["email", "password"], Props(schemas, "CredentialsRequest")); // rol alanı sözleşmede YOK
         Assert.Equal(["token"], Props(schemas, "CsrfTokenDto"));
+        Assert.Equal(["currentPassword", "newPassword"], Props(schemas, "ChangePasswordRequest"));
     }
 
     private static string[] Methods(JsonElement paths, string path) =>

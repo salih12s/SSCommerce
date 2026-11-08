@@ -96,12 +96,9 @@ public sealed class UserRegistration(
     // Identity iletileri İngilizcedir ve ileride değişebilir; kodlara göre sabit Türkçe iletiler verilir. Parola/e-posta metni asla yankılanmaz.
     private static (string Field, string Message) Map(IdentityError error) => error.Code switch
     {
-        "PasswordTooShort" => ("password", $"Parola en az {IdentityServiceCollectionExtensions.MinPasswordLength} karakter olmalıdır."),
-        "PasswordRequiresDigit" => ("password", "Parola en az bir rakam içermelidir."),
-        LetterPasswordValidator.ErrorCode => ("password", "Parola en az bir harf içermelidir."),
         "InvalidEmail" or "InvalidUserName" => ("email", "E-posta adresi geçersiz."),
         _ => error.Code.StartsWith("Password", StringComparison.Ordinal)
-            ? ("password", "Parola kurallara uymuyor.")
+            ? ("password", PasswordPolicyMessages.For(error.Code))
             : ("email", "Kayıt bilgileri geçersiz."),
     };
 }

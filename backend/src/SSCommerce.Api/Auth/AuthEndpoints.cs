@@ -13,10 +13,16 @@ namespace SSCommerce.Api.Auth;
 /// <summary>İstek gövdesi: yalnız e-posta ve parola. Başka alanlar (<c>role</c>, <c>isAdmin</c>...) yok sayılır, hiçbir etkisi yoktur.</summary>
 public sealed record CredentialsRequest(string? Email, string? Password);
 
+/// <summary>Parola değiştirme gövdesi (MD-2). Başka alanlar yok sayılır.</summary>
+public sealed record ChangePasswordRequest(string? CurrentPassword, string? NewPassword);
+
 public sealed record CapabilitiesDto(bool Admin, bool Warehouse);
 
-/// <summary>Oturum açmış kullanıcının güvenli özeti. Parola hash'i, security stamp, token ya da cookie değeri YOKTUR.</summary>
-public sealed record AccountDto(Guid Id, string Email, bool EmailConfirmed, IReadOnlyList<string> Roles, CapabilitiesDto Capabilities);
+/// <summary>
+/// Oturum açmış kullanıcının güvenli özeti. Parola hash'i, security stamp, token ya da cookie değeri YOKTUR.
+/// <c>CreatedAt</c> (MD-2) UTC'dir ve <c>DateTime</c> (Kind=Utc) olduğundan JSON'da <c>Z</c> ile biter (saniye hassasiyeti).
+/// </summary>
+public sealed record AccountDto(Guid Id, string Email, bool EmailConfirmed, IReadOnlyList<string> Roles, CapabilitiesDto Capabilities, DateTime CreatedAt);
 
 public sealed record CsrfTokenDto(string Token);
 
@@ -86,6 +92,18 @@ public static class AuthEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
+        auth.MapPost("/password", ChangePassword)
+            .WithName("ChangePassword")
+            .WithSummary("Parolayı değiştirir (MD-2, D-090): diğer oturumlar kapanır, bu oturum yeni cookie ile sürer. Yanlış mevcut parola 400 (currentPassword).")
+            .Accepts<ChangePasswordRequest>("application/json")
+            .RequireAuthorization()
+            .RequireRateLimiting(RateLimitPolicies.Credentials)
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
         auth.MapGet("/me", GetMe)
             .WithName("GetMe")
@@ -220,6 +238,51 @@ public static class AuthEndpoints
                 ApiErrorCodes.LogoutFailed);
     }
 
+    private static async Task<IResult> ChangePassword(
+        HttpContext http,
+        PasswordChanger passwordChanger,
+        SignInManager<AppUser> signIn,
+        UserManager<AppUser> users,
+        ILogger<AuthLog> logger,
+        CancellationToken cancellationToken)
+    {
+        var (body, bodyError) = await JsonRequestBody.ReadAsync<ChangePasswordRequest>(http.Request, MaxBodyBytes, cancellationToken);
+        if (body is null)
+        {
+            return ApiResults.ValidationFailed(bodyError!);
+        }
+
+        var errors = ValidateForPasswordChange(body);
+        if (errors.Count > 0)
+        {
+            return ApiResults.ValidationFailed(errors);
+        }
+
+        var user = await users.GetUserAsync(http.User);
+        if (user is null)
+        {
+            return ApiResults.Problem(StatusCodes.Status401Unauthorized, "Kimlik doğrulaması gerekli", ApiErrorCodes.Unauthenticated);
+        }
+
+        var result = await passwordChanger.ChangeAsync(user, body.CurrentPassword!, body.NewPassword!, cancellationToken);
+        switch (result.Status)
+        {
+            case PasswordChangeStatus.CurrentPasswordWrong:
+                return ApiResults.ValidationFailed(new Dictionary<string, string[]> { ["currentPassword"] = [CurrentPasswordWrong] });
+            case PasswordChangeStatus.NewPasswordInvalid:
+                return ApiResults.ValidationFailed(new Dictionary<string, string[]> { ["newPassword"] = result.NewPasswordErrors });
+            case PasswordChangeStatus.Conflict:
+                return ApiResults.Problem(StatusCodes.Status409Conflict, "Hesap aynı anda güncellendi, lütfen tekrar deneyin", ApiErrorCodes.Conflict);
+        }
+
+        // Stamp yenilendi (diğer oturumlar bir sonraki istekte düşer). Bu istekteki oturum, yeni stamp ile yeniden imzalanır (D-090);
+        // yoksa kullanıcının kendi cookie'si de bir sonraki istekte reddedilirdi. İmzalama başarısız olursa istisna 500 olur ama parola
+        // zaten değişmiştir: kullanıcı yeni parolayla giriş yapar (güvenli yön).
+        await signIn.RefreshSignInAsync(user);
+        logger.LogInformation("Oturum yeni parolayla yenilendi: {UserId}", user.Id);
+        return Results.NoContent();
+    }
+
     private static async Task<IResult> GetMe(HttpContext http, UserManager<AppUser> users)
     {
         var user = await users.GetUserAsync(http.User);
@@ -237,7 +300,9 @@ public static class AuthEndpoints
         var isAdmin = roles.Contains(AppRoles.Admin);
         // warehouse yeteneği = depo alanını kullanabilir (WarehouseOrAdmin politikasıyla aynı kural).
         var warehouse = isAdmin || roles.Contains(AppRoles.Warehouse);
-        return new AccountDto(user.Id, user.Email!, user.EmailConfirmed, roles, new CapabilitiesDto(isAdmin, warehouse));
+        var createdAt = user.CreatedAt.UtcDateTime;
+        createdAt = createdAt.AddTicks(-(createdAt.Ticks % TimeSpan.TicksPerSecond));
+        return new AccountDto(user.Id, user.Email!, user.EmailConfirmed, roles, new CapabilitiesDto(isAdmin, warehouse), createdAt);
     }
 
     private static Dictionary<string, string[]> ValidateForRegistration(CredentialsRequest body)
@@ -260,6 +325,36 @@ public static class AuthEndpoints
         else if (body.Password.Length > MaxPasswordLength)
         {
             errors["password"] = [$"Parola en çok {MaxPasswordLength} karakter olabilir."];
+        }
+
+        return errors;
+    }
+
+    private const string CurrentPasswordWrong = "Mevcut parola hatalı.";
+
+    /// <summary>
+    /// Biçim denetimi (hash ve kilit sayacından ÖNCE): boş/aşırı uzun girdi hash'lenmez. Yeni = mevcut denetimi iki GİRDİNİN kıyasıdır,
+    /// mevcut parolanın doğruluğu hakkında bilgi vermez. Politika denetimi (uzunluk/rakam/harf) <see cref="PasswordChanger"/>'dadır.
+    /// </summary>
+    private static Dictionary<string, string[]> ValidateForPasswordChange(ChangePasswordRequest body)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (string.IsNullOrEmpty(body.CurrentPassword) || body.CurrentPassword.Length > MaxPasswordLength)
+        {
+            errors["currentPassword"] = [CurrentPasswordWrong];
+        }
+
+        if (string.IsNullOrEmpty(body.NewPassword))
+        {
+            errors["newPassword"] = ["Yeni parola zorunludur."];
+        }
+        else if (body.NewPassword.Length > MaxPasswordLength)
+        {
+            errors["newPassword"] = [$"Parola en çok {MaxPasswordLength} karakter olabilir."];
+        }
+        else if (string.Equals(body.NewPassword, body.CurrentPassword, StringComparison.Ordinal))
+        {
+            errors["newPassword"] = ["Yeni parola mevcut parolayla aynı olamaz."];
         }
 
         return errors;

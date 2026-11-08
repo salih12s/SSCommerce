@@ -47,6 +47,7 @@ public static class IdentityServiceCollectionExtensions
 
         services.AddScoped<UserRegistration>();
         services.AddScoped<CredentialVerifier>();
+        services.AddScoped<PasswordChanger>();
         services.AddScoped<ISessionRevoker, SessionRevoker>();
         return services;
     }

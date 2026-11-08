@@ -28,7 +28,11 @@ public sealed class CredentialVerifier(
     // Hash maliyetini eşitlemek için kullanılan sahte kullanıcı (parola hash'i hesaplanır, hiçbir yere yazılmaz).
     private static readonly AppUser TimingDummyUser = new() { UserName = "timing-dummy" };
 
-    public async Task<AppUser?> VerifyAsync(string email, string password, CancellationToken cancellationToken)
+    /// <param name="forPasswordChange">
+    /// Çağıran bağlamı yalnız LOG iletisini ayırt eder (gözlemlenebilirlik: oturumlu bir hesabın parola değiştirme ucundan tahmin yapılması
+    /// girişten ayırt edilebilsin). Sayaç, kilit ve zamanlama davranışı iki bağlamda AYNIDIR; giriş log iletileri değişmez.
+    /// </param>
+    public async Task<AppUser?> VerifyAsync(string email, string password, CancellationToken cancellationToken, bool forPasswordChange = false)
     {
         var user = await users.FindByEmailAsync(email);
         if (user is null)
@@ -42,14 +46,30 @@ public sealed class CredentialVerifier(
         {
             // Kilitliyken parola doğrulanmaz (doğru parola da reddedilir) ama süre farkı olmasın diye hash yine hesaplanır.
             users.PasswordHasher.HashPassword(TimingDummyUser, password);
-            logger.LogInformation("Giriş reddedildi, hesap kilitli: {UserId}", user.Id);
+            if (forPasswordChange)
+            {
+                logger.LogInformation("Parola değiştirme reddedildi, hesap kilitli: {UserId}", user.Id);
+            }
+            else
+            {
+                logger.LogInformation("Giriş reddedildi, hesap kilitli: {UserId}", user.Id);
+            }
+
             return null;
         }
 
         if (!await users.CheckPasswordAsync(user, password))
         {
             await RegisterFailureAsync(user.Id, cancellationToken);
-            logger.LogInformation("Başarısız giriş denemesi: {UserId}", user.Id);
+            if (forPasswordChange)
+            {
+                logger.LogInformation("Başarısız parola değiştirme denemesi: {UserId}", user.Id);
+            }
+            else
+            {
+                logger.LogInformation("Başarısız giriş denemesi: {UserId}", user.Id);
+            }
+
             return null;
         }
 

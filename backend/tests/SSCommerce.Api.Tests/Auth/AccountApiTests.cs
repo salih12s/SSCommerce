@@ -48,7 +48,7 @@ public class AccountApiTests(AuthApiFixture fixture)
         var root = json.RootElement;
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Equal(["capabilities", "email", "emailConfirmed", "id", "roles"], root.EnumerateObject().Select(p => p.Name).Order().ToArray());
+        Assert.Equal(["capabilities", "createdAt", "email", "emailConfirmed", "id", "roles"], root.EnumerateObject().Select(p => p.Name).Order().ToArray());
         Assert.Equal(email, root.GetProperty("email").GetString());
         Assert.False(root.GetProperty("emailConfirmed").GetBoolean()); // D-036: e-posta doğrulaması yok, "doğrulandı" denmez
         Assert.Equal(["Customer"], root.GetProperty("roles").EnumerateArray().Select(r => r.GetString()!).ToArray());

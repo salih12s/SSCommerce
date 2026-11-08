@@ -42,6 +42,7 @@ public class ApiSurfaceTests(AuthApiFixture fixture)
         "/api/v1/orders",
         "/api/v1/auth/me",
         "/api/v1/auth/logout",
+        "/api/v1/auth/password",
     ];
 
     private static bool IsPerUser(string route) =>
@@ -162,6 +163,7 @@ public class ApiSurfaceTests(AuthApiFixture fixture)
     [InlineData("/api/v1/checkout/preview", "POST")]
     [InlineData("/api/v1/auth/me", "GET")]
     [InlineData("/api/v1/auth/logout", "POST")]
+    [InlineData("/api/v1/auth/password", "POST")]
     public void An_admin_or_per_user_endpoint_with_AllowAnonymous_turns_the_rule_red(string route, string method)
     {
         var leaky = Build(route, method, new AuthorizeAttribute(AuthPolicies.AdminOnly), new AllowAnonymousAttribute(), RequestProtectionMetadata.Instance);
