@@ -21,6 +21,8 @@ Teknoloji ve yaşam tarzı ürünleri satan, tek satıcılı bir e-ticaret mağa
 
 > Yalnızca bu makinede gerçekten çalıştırılmış komutlar yazılıdır (bkz. [PROGRESS](docs/PROGRESS.md)).
 
+**Tek komutla (ilk kurulumdan sonra):** proje kökünde `.\dev` → dev veritabanını açar (`docker compose up -d --wait`), API'yi (http://localhost:5080) başlatıp `/health/ready`'yi bekler, sonra web'i (http://localhost:3000) açar; Ctrl+C ikisini birlikte durdurur. `.\dev -Seed` önce demo kataloğu yükler. Parola çalışma anında kök `.env`'den okunur, yazdırılmaz (`dev.ps1`; `dev.cmd` çalıştırma ilkesine takılmadan açar). Aşağıdaki adımlar aynı işin elle yapılışıdır.
+
 ### 1. Veritabanı (Docker Desktop)
 
 ```powershell
