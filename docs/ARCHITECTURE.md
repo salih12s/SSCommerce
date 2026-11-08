@@ -96,6 +96,10 @@ Bir istek şu yoldan geçer: `GET /api/v1/products?...` → `Api/Catalog/Catalog
 - Faz 3 public okuma uçları; Faz 4 cookie auth, CSRF ve rol policy'leri. Web bu uçlara bağlıdır (D-041); admin CRUD Faz 8 ile gelmiştir (aşağıdaki Faz 8 bölümü). E-posta doğrulama/parola sıfırlama yoktur.
 - MVP'de (Faz 0–9) gerçek ödeme yok. Faz 7 siparişi ödeme almadan oluşturur; gerçek ödeme entegrasyonu sonraki sürüme aittir. Arayüz hiçbir zaman ödeme alınmış izlenimi vermez.
 
+## Faz 9 Üretim-eşdeğeri dağıtım (D-077–D-083)
+
+`edge (Caddy, TLS) → web (node server.mjs) → api (ASP.NET, Production) → db (PostgreSQL 17)`; kod: `deploy/` (Dockerfile.api hedefleri `api`/`schema`/`migrate`, Dockerfile.web, compose.yml, Caddyfile, db/*, scripts/*). `backend` ağı internal; sabit IP'ler güvenilir-proxy listelerini tam adresle yazmayı sağlar. Veritabanı rolleri `ssc_owner` (göç), `ssc_app` (çalışma, en az yetki), `ssc_backup` (okuma). API tarafı: `backend/src/SSCommerce.Api/Observability/**` (güvenlik başlıkları, `X-Request-Id`, `System.Diagnostics.Metrics`, iç metrik portu), `Security/ProductionConfigurationValidator.cs` (Production/Staging fail-fast), `Ordering:Enabled` sunucu anahtarı. Web tarafı: `apps/web/server/{handler,security,csp,observability,health,shutdown}.mjs`. Ayrıntı: `docs/DEPLOYMENT.md`, `docs/OPERATIONS.md`, `docs/SECURITY_REVIEW_PHASE_9.md`.
+
 ## Altyapı
 - `docker-compose.yml`: PostgreSQL 17, healthcheck, `sscommerce-pgdata` named volume, host portu `5433` (bkz. DECISIONS D-007).
 - CI tanımı .NET build/test ve web lint/typecheck/build, HTTP ingress, gerçek DB/API Playwright, proxy rate-limit kontrollerini içerir. E2eHost test DB'sini normal teardown'da temizler. Uzak çalıştırma hâlâ faturalandırma nedeniyle BLOCKED_EXTERNAL; yerel sonuçlar PROGRESS'tedir.

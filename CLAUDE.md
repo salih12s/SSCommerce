@@ -2,7 +2,7 @@
 
 E-ticaret uygulaması (tek satıcı, fiziksel ürün, TRY, ilk sürümde gerçek ödeme yok).
 Yığın: **ASP.NET Core 10 + EF Core 10 + PostgreSQL** (`backend/`), **Next.js App Router + TypeScript + Tailwind** (`apps/web/`).
-Son hedef: `GOAL_PHASE_8_ERP_ADMIN_EN.md` (Faz 8 ERP/Admin; yerelde doğrulandı, dev DB migration uygulandı, `c8bba63` ile push edildi; main birleştirmesi onay bekliyor, sözleşme `docs/CONTRACT_PHASE_8.md`). Önceki hedefler: `GOAL_PHASE_7_ORDERING_EN.md`, `GOAL_PHASES_5_6_MULTI_AGENT_EN.md`, `GOAL_PHASES_3_4.md`, `GOAL_PHASES_0_2.md`. Faz 9 yeni talimat ister. İlerleme: `docs/PROGRESS.md` (tek kaynak). Kararlar: `docs/DECISIONS.md`. Mimari: `docs/ARCHITECTURE.md`.
+Son hedef: `GOAL_PHASE_9_PRODUCTION_EN.md` (Faz 9 üretim hazırlığı; yerel üretim-eşdeğeri yığında doğrulandı, kanıt `docs/PHASE_9_VERIFICATION.md`; barındırma/herkese açık TLS/hosted CI dış bağımlılık, `feat/phase-3-4-complete` dalına push edildi (`919c7a9` + docs commit'i), PR/main/tag onay bekliyor; dağıtım `docs/DEPLOYMENT.md`, işletim `docs/OPERATIONS.md`). Önceki hedef: `GOAL_PHASE_8_ERP_ADMIN_EN.md` (Faz 8, push edildi `c8bba63`, sözleşme `docs/CONTRACT_PHASE_8.md`). Önceki hedefler: `GOAL_PHASE_7_ORDERING_EN.md`, `GOAL_PHASES_5_6_MULTI_AGENT_EN.md`, `GOAL_PHASES_3_4.md`, `GOAL_PHASES_0_2.md`. Planlanan son faz tamamdır; sonrası yeni talimat ister. İlerleme: `docs/PROGRESS.md` (tek kaynak). Kararlar: `docs/DECISIONS.md`. Mimari: `docs/ARCHITECTURE.md`.
 Kurallar: para API'de kuruş (`long`), domain'de `decimal`, DB'de `numeric(18,2)`; zaman UTC. İş mantığı yalnızca backend'de.
 
 ## Roller

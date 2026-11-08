@@ -15,6 +15,7 @@ Bunlardan yalnızca `PASS` başarıdır. Kanıtlar ilgili bölümde belirtilen 2
 | 5 | **PASS (yerel)** | Atomik stok, idempotency, eşzamanlılık gerçek PostgreSQL'de; admin API; dürüst public stok. Bölüm: "Faz 5: Inventory" | `40f030b` | `main`'e birleştirme kararı |
 | 6 | **PASS (yerel)** | Sepet, adres, salt okunur önizleme, `/sepet`, `/checkout`, `/hesabim/adresler`. Bölüm: "Faz 5–6 nihai kabul" | `40f030b` | `main`'e birleştirme kararı |
 | 7 | **PASS (yerel)** | Sipariş, idempotency, iptal, personel geçişleri, `/siparisler`. Bölüm: "Faz 7: Ordering" | Kod `508458b`; belgeler hemen sonraki commit; `feat/phase-3-4-complete` push edildi · uzak CI: BLOCKED_EXTERNAL | `main`'e birleştirme kararı; Faz 8 yeni talimat ister |
+| 9 | **LOCAL_PRODUCTION_EQUIVALENT_PASS · EXTERNAL_DEPLOYMENT_PENDING · PUSHED_TO_FEATURE_BRANCH** | Yalıtılmış üretim-eşdeğeri yığın (Caddy TLS → Next → ASP.NET → PostgreSQL 17); backend 2304/0/0, web e2e 213, test:server 40, üretim yığını tarayıcı E2E 21, https-check 69, resilience 11, yükseltme 22, yedek/geri yükleme, yük+tutarlılık S1–S8+K1. Güvenlik/Sağlık/QA: PASS_WITH_FINDINGS (Medium'lar düzeltildi). Bölüm: "Faz 9: kapanış" · `docs/PHASE_9_VERIFICATION.md` | Push edildi: `919c7a9` (feat) + docs commit'i → `origin/feat/phase-3-4-complete`; PR/main/tag YOK · hosted CI: BLOCKED_EXTERNAL | Sahip: PR/main/tag onayı, barındırma/alan adı/herkese açık TLS, herkese açık sipariş iş-riski kararı (D-061/D-071/D-072) |
 | 8 | **VERIFIED · dev DB migration uygulandı · push edildi (`c8bba63`)** | Admin API + `/admin` (11 rota), rol/stok/katalog/sipariş yönetimi, F8.5 sınırları. Backend Release 2195/0/0, Playwright 210/0/0 (50 admin). Güvenlik/sağlık/QA: PASS_WITH_FINDINGS. Bölüm: "Faz 8: nihai doğrulama" | Main birleştirmesi yapılmadı · uzak CI: BLOCKED_EXTERNAL | Main birleştirme onayı; D-071; üretim sipariş eşikleri; Faz 9 talimatı |
 
 **Yerel teknik durum: bütün kapılar PASS.** Son kanıtlar "Faz 7: Ordering" bölümünde. Uzak CI GitHub hesabının faturalandırma kilidi yüzünden çalışmıyor (BLOCKED_EXTERNAL); ayrıntı "Git durumu"nda.
@@ -594,3 +595,76 @@ Yeni admin testleri (47): access 12, responsive 6, catalog 9, stock 7, fulfilmen
 - **Doğrulama (salt okunur, soket):** `__EFMigrationsHistory` 6 kayıt (son: `20261102073215_AddAdminOperations`); `admin_audit_log` ve tetikleyicileri (`no_update_delete`, `no_truncate`) ile 3 CHECK + FK var; seed değişmedi (ürün 10 hepsi `version=1`, kategori 4, varyant 19, görsel 8); kullanıcı 0, `admin_audit_log` 0 satır.
 - **Yapılmayan:** dev API'ye karşı uçtan uca duman testi. Dev parolası yalnız kök `.env`'de, Claude okuyamaz; sahibi `docker compose up` ile API'yi başlatıp `/health/ready` ve `--bootstrap-admin` ile ilk Admin'i deneyebilir.
 - **Git:** `c8bba63` (164 dosya) `origin/feat/phase-3-4-complete` dalına push edildi. Main'e birleştirme yok. Kök referans PNG stage edilmedi.
+
+## Faz 9: üretim hazırlığı, dağıtım ve devir (başladı 2026-11-07)
+
+Belirtim: `GOAL_PHASE_9_PRODUCTION_EN.md` (git'te izlenmiyor; sahip talimatı). Etiketler: `LOCAL_PASS` · `STAGING_PASS` · `PRODUCTION_VERIFIED` · `BLOCKED_EXTERNAL` · `NOT_VERIFIED` · `PENDING_OWNER_APPROVAL`. Faz 8 sayıları (2195 backend, 210 Playwright) bu fazda **tarihsel**; son kod üzerinde yeniden koşulacak.
+
+### Kontrol noktası 1: denetim ve iskelet (2026-11-07)
+
+**Başlangıç:** dal `feat/phase-3-4-complete`, HEAD `965ebad`, `origin` ile eşit. İzlenmeyen: kök PNG (stage edilmez) ve `GOAL_PHASE_9_PRODUCTION_EN.md`. Dev DB (5433) Faz 8 migration'ı uygulanmış durumda; Faz 9'da dokunulmaz.
+
+**Denetim bulguları (kanıt: kod okuma):**
+| Alan | Durum |
+|---|---|
+| Üretim imajı / compose / TLS kenarı | **Yoktu.** Yalnız dev PostgreSQL compose'u. |
+| Güvenlik başlıkları (CSP, nosniff, frame-ancestors) | **Hiç yoktu** (web ve API). |
+| Telemetri / korelasyon | Yoktu (yalnız `traceId` ProblemDetails'te). |
+| Sağlık | Var ve sağlam: `/health/live`, `/health/ready` (PostgreSQL + bekleyen migration; D-065 ısınma). |
+| Çerez/CSRF/rate limit/trusted proxy | Var (`__Host-` çerezler non-Development'ta, `AssumeHttps`, `KnownProxies`, `WEB_TRUSTED_PROXIES`). |
+| Data Protection | `DataProtection__KeysPath` yoksa yalnız UYARI (hataya çevrilecek). |
+| Sipariş yazma anahtarı | Yoktu; `CheckoutPreview.OrderingAvailable` sabit true. |
+| CI | `actionlint` temiz; imaj derleme işi yoktu. |
+| Not | `next.config.ts` rewrite hedefi `API_BASE_URL`'i **derleme zamanında** gömer; `src/proxy.ts` çalışma zamanında okur → ikisi aynı olmalı. `/api/backend/*` rewrite'ı API'nin `/health`, `/metrics`'ini de dışarı açardı → kenarda engellenecek. |
+
+**Karar (lead):** Topoloji = Caddy (TLS) → Next `server.mjs` → ASP.NET API → PostgreSQL 17, Docker Compose, `backend` ağı **internal** (çıkış yok), sabit IP'lerle güvenilir-proxy listeleri, yalnız kenar `127.0.0.1:8443/8080` yayımlar. `next start`/`standalone` yok. Çalışma rolleri: `ssc_owner` (şema/göç), `ssc_app` (çalışma, DDL/TRUNCATE/tetikleyici yetkisi yok), `ssc_backup` (`pg_read_all_data`). Göç = build zamanında üretilen idempotent EF SQL'i + `post-migrate.sql`. Sipariş yazma `Ordering__Enabled` ile (dağıtım varsayılanı **false**, kod varsayılanı true).
+
+**Eklenen dosyalar (lead):** `.dockerignore`, `deploy/Dockerfile.api` (hedefler: `api`, `schema`, `migrate`), `deploy/Dockerfile.web`, `deploy/compose.yml`, `deploy/Caddyfile`, `deploy/stack.env.example`, `deploy/db/{init/10-roles.sh,migrate.sh,post-migrate.sql,invariants.sql}`, `deploy/scripts/{gen-env.sh,backup-inner.sh,restore-verify.sh}`, `.github/workflows/ci.yml` (imaj işi, `timeout-minutes`, `Host=127.0.0.1`).
+
+**Doğrulananlar (LOCAL_PASS):** `actionlint` (1.7.7) CI için çıkış 0; `docker compose config -q` çıkış 0; `restore-verify.sh` geliştirme yedeğinin *kopyasıyla* (tek kullanımlık ağsız sunucu): `pg_restore` tamam, 6 iş değişmezi 0 ihlal. **Doğrulanmayanlar (NOT_VERIFIED):** imaj derlemeleri (backend-dev değişiklikleri sürüyor), yığının ayağa kalkması, HTTPS/çerez, yedek/geri yükleme, yük testi, bağımsız kapılar.
+
+**Devredilenler (çalışıyor):** `backend-dev` → API güvenlik başlıkları, korelasyon, `System.Diagnostics.Metrics` + iç metrik portu, `Ordering:Enabled`, Production/Staging fail-fast. `frontend-dev` → `server.mjs` güvenlik başlıkları + CSP, korelasyon/erişim günlüğü, `/healthz` `/readyz`, zarif kapanış, build'de `API_BASE_URL` zorunluluğu.
+
+**Devam için sıradaki adımlar:** (1) ajan raporlarını al, imajları derle; (2) yığını kaldır, HTTPS/çerez/XFF/Data Protection yeniden başlatma testleri; (3) migration yükseltme + yedek/geri yükleme provası; (4) yük/dayanıklılık; (5) tam Release regresyonu; (6) güvenlik/sağlık/QA kapıları; (7) belgeler (`DEPLOYMENT`, `OPERATIONS`, `SECURITY_REVIEW_PHASE_9`, `PHASE_9_VERIFICATION`, `SSCOMMERCE_LEARNING_MAP`, `RELEASE_NOTES`).
+
+### Kontrol noktası 2: imajlar, yığın, HTTPS, dayanıklılık, yükseltme (2026-11-07)
+
+**Ajan çıktıları (bağımsız kanıt, kendi koşuları):** `backend-dev` → B1–B6 tamam; `dotnet test … -c Release` **2283 geçti / 0 / 0** (önceki 2195, +88), yeni `Observability/*`, `Orders/OrderingSwitchTests`. `frontend-dev` → F1–F6 tamam; `test:server` **33 geçti** (önceki 10), `test:e2e` **213 geçti** (önceki 210, +3 `csp.spec`), lint/typecheck 0. CSP: `script-src 'self' 'nonce-…' + sha256` (12 özet, derleme çıktısındaki sabit kabuk betikleri; `unsafe-inline/eval` YOK), `style-src 'self' 'nonce-…'`, ayrıca `style-src-attr 'unsafe-inline'` (SSR `style=""` öznitelikleri; betik çalıştıramaz; bileşenler sınıfa çevrilirse kalkar) → kabul edilen Low. SIGTERM'in gerçek süreç testi Windows'ta atlanır (POSIX'te koşar); mantık `gracefulClose` birim testlerinde.
+
+**İmajlar (LOCAL_PASS):** `sscommerce-api:local` 204 MB (alpine, kullanıcı `app`, `DOTNET_EnableDiagnostics=0`), `sscommerce-migrate:local` 423 MB, `sscommerce-web:local` 987 MB (üretim `node_modules`; küçültme ayrı iş). Temel imajlar etiket+digest ile sabit. `API_BASE_URL` build-arg zorunlu.
+
+**Yığın (LOCAL_PASS):** proje `sscommerce-stack`, ağ `backend` internal, sabit IP (edge .10, web .11, api .12, db .20), yalnız `127.0.0.1:8443/8080` yayımlı; kök dosya sistemi salt okunur, `cap_drop ALL`, `no-new-privileges`. Dev yığınından ayrı (proje, volume, port). `docker compose config` çıkış 0.
+
+**Yetki modeli (gerçek PostgreSQL, 15 sorgu):** `ssc_app` DDL/TRUNCATE/tetikleyici kapatma/DROP/CREATE yapamaz, yalnız-ekleme tablolarında (admin_audit_log, stock_movements …) UPDATE/DELETE ve `orders` DELETE yetkisi yok, `__EFMigrationsHistory`'ye yalnız okuma; süper kullanıcı/createdb/createrole değil. `ssc_backup` yalnız okur. (`ssc_owner`'ın güvenilir uzantı `pgcrypto` oluşturabildiği görüldü; sahip rolü, uygulama rolü değil; test uzantısı geri alındı.)
+
+**HTTPS/çerez/proxy:** `deploy/scripts/https-check.sh` **46 geçti / 0 kaldı** (yerel CA ile zincir doğrulama `verify=0`; HTTP→HTTPS 308 yol+sorgu korunur; CA'sız bağlantı reddi; `/api/backend/health|metrics|openapi` kenarda 404; 3000/5432/9100/5080 dışarıdan erişilemez; HSTS, CSP, nosniff, XFO, Referrer-Policy; `Server` sızmıyor; kenar `X-Request-Id`'yi ezip UUID üretir; `__Host-ssc.csrf` ve `__Host-ssc.auth` Secure/HttpOnly/Path=/ Domain'siz, SameSite Strict/Lax, oturum çerezi; CSRF'siz/yabancı Origin/sahte jeton → reddedilir; çıkış sonrası eski çerez 401; sahte XFF rate limit'i atlatamaz, 429 + `Retry-After`). **NOT:** bu yerel CA ile doğrulamadır, herkese açık CA (Let's Encrypt) doğrulaması DEĞİL.
+
+**Dayanıklılık:** `deploy/scripts/resilience-check.sh` **11/11**: api+web restart, `--force-recreate` ve DB restart sonrası aynı oturum çerezi geçerli ve veri sayıları sabit (Data Protection anahtarları `sscommerce-stack-dpkeys` volume'ünde); boş anahtar halkalı ikinci örnek aynı çerezi ÇÖZEMEZ (401); güvenilmeyen eşten gelen sahte XFF yok sayılır, kova bölümlemesi bağımsız. İlk koşuda yeniden yaratma sonrası geçici 503 görüldü (Caddy aktif sağlık gecikmesi) → `lb_try_duration 8s`, `health_interval 3s` ile giderildi, yeniden koşuda geçti.
+
+**Telemetri (canlı):** metrik yalnız iç port 9100'de (ana portta 404); sayaçlar `ssc_orders_total{outcome}`, `ssc_ready_*`, `http_server_*`; çıktıda e-posta/çerez/parola YOK (tarama 0). Sipariş anahtarı kapalıyken canlı `POST /orders` → 503 `ordering_disabled`.
+
+**Yükseltme provası:** `deploy/scripts/upgrade-drill.sh` **22/22**: Faz 8 öncesi gerçek geliştirme dökümü (5 migration, ürün 10) tek kullanımlık sunucuya geri yüklendi → göç imajı → 6 migration; ikinci çalıştırma idempotent; sayılar sabit; `products.version`=1; 6 iş değişmezi 0 ihlal; rol yetkileri doğru. `dotnet ef migrations has-pending-model-changes`: "No changes". İlk Admin: gerçek `--bootstrap-admin` komutu, DB konteynerinin ağ ad alanına katılan tek kullanımlık konteynerle (`deploy/scripts/api-command.sh`); denetim `role.bootstrap` 1 satır.
+
+**Devam:** tarayıcı E2E (`frontend-dev`, `apps/web/tests/prod`) çalışıyor; sıradaki: yedek/geri yükleme provası (gerçek sipariş verisiyle), yük + tutarlılık, kaos (DB kesintisi), tam Release regresyonu, bağımsız kapılar, belgeler.
+
+### Kontrol noktası 3: tarayıcı E2E ve yedek/geri yükleme (2026-11-07)
+
+**Üretim yığınına karşı tarayıcı E2E (LOCAL_PASS):** `frontend-dev`, `apps/web/playwright.prod.config.ts` + `tests/prod/01..06`. `PROD_CREDS_FILE=<yol> npm run test:prod` → **21 geçti / 0 kaldı / 0 atlandı**, çıkış 0 (3,4 dk; iki ardışık tam koşu aynı sonuç). Kapsam: çerez nitelikleri tarayıcıda (`__Host-ssc.auth` Secure/HttpOnly/Path=/ host-only/Lax; `document.cookie` göremez); 12 vitrin + 11 admin rota × 390/768/1440'ta sıfır `securitypolicyviolation`/konsol hatası (yalnız beklenen 401/403/404 kaynak iletileri süzüldü); gerçek sipariş akışı (kayıt→sepet→adres→önizleme→sipariş→iptal→stok geri), "Ödeme alınmadı" dili ve "ödendi/ciro" yok; aynı Idempotency-Key ikinci POST `replayed:true`; Depo yalnız sipariş ekranları, Depo sipariş detayı ve API yanıtlarında alıcı adı/telefon/adres YOK (D-071), Depo iptali 403; axe ciddi/kritik 0; klavyeyle giriş ve sepete ekleme; `/health|/metrics|/openapi` kenarda 404. Kendi negatif kontrolü: sahte CSP ihlali/konsol hatası/axe ihlali yakalandı. Uygulama hatası bulunmadı. Yan etki: yığında Depo rolü kalıcı, test müşterileri ve siparişleri birikir (drill verisi).
+
+**Yedek/geri yükleme (LOCAL_PASS, gerçek veri):** `docker compose … --profile tools run --rm backup` (`ssc_backup`, `pg_dump -Fc`): `sscommerce-20261107T201700Z.dump` 128 244 bayt, sha256 tamam; canlı veri 92 kullanıcı / 34 sipariş / 52 stok hareketi / 8 denetim / 61 sepet. `restore-verify.sh` → tek kullanımlık ağsız sunucuda `pg_restore --exit-on-error` tamam; manifest: 6 migration + 23 tablo sayısı + 16 tetikleyici **tam eşleşti**; 6 iş değişmezi 0 ihlal; çıkış 0. **Negatif kontroller:** manifestte `orders=35` yazılınca `HATA … beklenen=35 gelen=34`, çıkış 1; kesik döküm `pg_restore` hatası, çıkış 1.
+
+**Belgeler yazıldı:** `docs/DEPLOYMENT.md`, `docs/OPERATIONS.md`, `docs/RELEASE_NOTES.md`, `docs/SSCOMMERCE_LEARNING_MAP.md` (269 yol, hepsi çözülüyor), `docs/DECISIONS.md` D-077..D-083. **Bekleyen:** `PHASE_9_VERIFICATION.md`, `SECURITY_REVIEW_PHASE_9.md`, README/ROADMAP/ARCHITECTURE/CLAUDE.md güncellemeleri.
+
+**Sırada:** yük + tutarlılık + DB kesintisi (`backend-dev`, `deploy/loadtest/`, hız sınırı katmanı `deploy/compose.perf.yml` uygulanmış durumda; **bitince katman kaldırılıp yığın üretim ayarına döndürülecek**), tam Release regresyonu, bağımsız kapılar.
+
+### Faz 9: kapanış (2026-11-08)
+
+**Durum: `PHASE 9: LOCAL_PRODUCTION_EQUIVALENT_PASS / EXTERNAL_DEPLOYMENT_PENDING / PUSHED_TO_FEATURE_BRANCH`.** Yukarıdaki "Kontrol noktası 1–3" bölümlerindeki sayılar **ara değerlerdir** (backend 2283, test:server 33, https-check 46, kararlar "D-077..D-083"); **güncel ve bağlayıcı kanıt `docs/PHASE_9_VERIFICATION.md`'dir**.
+
+**Son sayılar (son kod, son imajlar):** backend `dotnet test -c Release` **2304 geçti / 0 / 0**; `test:server` **40**; `test:e2e` **213**; `test:proxy` PASS; `test:prod` (üretim yığını, gerçek Chromium/HTTPS) **21**; `https-check.sh` **69**; `resilience-check.sh` **11**; `upgrade-drill.sh` **22**; `restore-verify.sh` (gerçek veri) tüm kontroller geçti; yük S1–S8 + K1 GEÇTİ; `actionlint` temiz. Kararlar D-077..D-086.
+
+**Faz 9 sırasında bulunup düzeltilenler (kanıtlı):** B1 IPv6 /64 hız sınırı kovası; B2 sipariş anahtarı fail-closed (Production/Staging'de açık değer zorunlu); B3 `pg_hba` loopback `trust` (parolasız süper kullanıcı) → `scram-sha-256`; `/health/ready` 5–7,7 sn → ~3,0 sn (D-084); API ölüyken 500/504 → 503 problem+json (D-085); **kayıt yanıtındaki `JsonSerializerOptions` ilk kullanım yarışı → HTTP 500 (D-086, Faz 9 öncesinden)**; sessizce başarısız olan imaj derlemesi (Docker `ARG VERSION` ⇒ MSBuild `Version` çakışması, `BUILD_VERSION`); `.next/cache` yazılamazlığı; kırılgan test varsayımı (`03-order-flow` stok ≥ 15); belge–kanıt farkları (QA).
+
+**Bilinçli olarak yapılmayanlar / dış bağımlılıklar:** barındırma, alan adı, DNS, herkese açık CA TLS (`BLOCKED_EXTERNAL`); hosted CI (GitHub faturalandırma kilidi, `BLOCKED_EXTERNAL`); herkese açık sipariş (D-061/D-071/D-072, `PENDING_OWNER_APPROVAL`: dağıtım varsayılanı `ORDERING_ENABLED=false`, sunucuda 503); performans hedefleri (yalnız taban ölçüm); yedek saklama süresi/zamanlayıcı; soak/stress/spike; Linux SIGTERM; gerçek internet istemcileri. **Git (2026-11-08, sahip onayıyla):** iki commit (`919c7a9` feat + docs) `origin/feat/phase-3-4-complete`'e push edildi (force push yok); PR, tag, `main` birleştirmesi ve herkese açık dağıtım YAPILMADI. Drill yığını hâlâ çalışıyor (`sscommerce-stack`, sipariş kapalı); dev yığını (5433) ve dev veritabanı dokunulmadı.
+
+**Yeni/değişen yüzey (commit `919c7a9`):** `deploy/**` (Dockerfile.api/web, compose.yml + compose.perf.yml, Caddyfile, db/*, scripts/*, loadtest/*), `.dockerignore`, `.github/workflows/ci.yml`, backend `Observability/**`, `Security/ProductionConfigurationValidator.cs`, `Infrastructure/Health/BoundedWork.cs`, sipariş anahtarı, web `server/*.mjs`, `apps/web/tests/prod/**`, `playwright.prod.config.ts`, belgeler (`DEPLOYMENT`, `OPERATIONS`, `SECURITY_REVIEW_PHASE_9`, `PHASE_9_VERIFICATION`, `SSCOMMERCE_LEARNING_MAP`, `RELEASE_NOTES`), `DECISIONS` D-077..D-086. Kök referans PNG stage edilmez.

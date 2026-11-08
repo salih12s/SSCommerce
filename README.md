@@ -140,12 +140,23 @@ Komut kayıtlı hesabın e-postasını iki kez ister (parola istemez, yazdırmaz
 
 **Üretim önkoşulları (Faz 8'in eklediği/vurguladığı).**
 - `WEB_TRUSTED_PROXIES` (web) ve `Security__TrustedProxies__*` (API) birbirine uygun ayarlanmalıdır. Web'in önünde gerçek bir ters proxy varken `WEB_TRUSTED_PROXIES` boş kalırsa istemci IP'si okunamaz ve hız sınırı kovası bütün istemciler için tek olur (sağlık kapısında gözlendi).
-- `--bootstrap-admin` üretim veritabanına karşı kullanılmaz; yalnız Development + loopback korumalıdır, bu korumanın tek başına yeterli olduğu varsayılmamalıdır.
-- Gerçek ödeme, iade, e-posta doğrulama, parola sıfırlama ve `/admin` için sıkı CSP yoktur (Faz 9 ve sonrası).
+- `--bootstrap-admin` HTTP ucu değildir; yalnız Development + loopback korumalıdır. Üretim-eşdeğeri yığında `deploy/scripts/api-command.sh` ile, DB konteynerinin ağ ad alanına katılan tek kullanımlık konteynerden çalıştırılır (D-083).
+- Gerçek ödeme, iade, e-posta doğrulama ve parola sıfırlama yoktur. CSP Faz 9'da eklendi (nonce+hash; `style-src-attr 'unsafe-inline'` bilinen Low, D-081).
 - Veritabanı: yeni migration `AddAdminOperations` yalnız ekleyicidir. Mevcut bir veritabanına uygulamadan önce `pg_dump -Fc` yedeği alın; dev veritabanında uygulama sahibinin onayına bağlıdır.
+
+## Üretim-eşdeğeri dağıtım (Faz 9)
+
+Yalıtılmış yerel yığın (Caddy TLS → Next `server.mjs` → ASP.NET → PostgreSQL 17, Docker Compose): [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). İşletim (yedek/geri yükleme, sorun giderme, uyarılar): [docs/OPERATIONS.md](docs/OPERATIONS.md). Kanıtlar: [docs/PHASE_9_VERIFICATION.md](docs/PHASE_9_VERIFICATION.md); güvenlik: [docs/SECURITY_REVIEW_PHASE_9.md](docs/SECURITY_REVIEW_PHASE_9.md); ne yapar/yapmaz: [docs/RELEASE_NOTES.md](docs/RELEASE_NOTES.md).
+
+```sh
+sh deploy/scripts/gen-env.sh                                  # rastgele sırlar (ekrana yazılmaz)
+docker compose -f deploy/compose.yml --env-file deploy/.env.stack up -d --build
+```
+
+Dev yığınından (kök `docker-compose.yml`, 5433) ayrıdır. **Herkese açık sipariş varsayılan KAPALI** (`ORDERING_ENABLED=false`; sunucuda 503): ödeme yok, stok rezervasyonu otomatik sona ermez; açmak sahibin iş-riski kararıdır. Barındırma/alan adı/herkese açık TLS ve hosted CI **doğrulanmadı** (`BLOCKED_EXTERNAL`).
 
 ## Henüz yapılmayanlar
 
-- Kalite ve deployment (9). ERP/Admin (8) yerelde doğrulandı ama commit edilmedi ve `AddAdminOperations` geliştirme veritabanına henüz uygulanmadı. Ayrıntı: [ROADMAP](docs/ROADMAP.md). Vitrindeki ürünler ve fiyatlar **demo verisidir**; ödeme yoktur.
+- Faz 9 (üretim hazırlığı) yerel üretim-eşdeğeri yığında doğrulandı; gerçek barındırma, herkese açık TLS ve hosted CI sahip eylemi/dış bağımlılık bekliyor. ERP/Admin (8) push edildi (`c8bba63`). Ayrıntı: [ROADMAP](docs/ROADMAP.md). Vitrindeki ürünler ve fiyatlar **demo verisidir**; ödeme yoktur.
 - MVP dışı: gerçek ödeme entegrasyonu ve stok rezervasyonu.
 - Uzak CI: GitHub hesabının faturalandırma kilidi yüzünden çalışmıyor (BLOCKED_EXTERNAL); bütün kontroller yerelde koşuluyor.
