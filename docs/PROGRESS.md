@@ -668,3 +668,32 @@ Belirtim: `GOAL_PHASE_9_PRODUCTION_EN.md` (git'te izlenmiyor; sahip talimatı). 
 **Bilinçli olarak yapılmayanlar / dış bağımlılıklar:** barındırma, alan adı, DNS, herkese açık CA TLS (`BLOCKED_EXTERNAL`); hosted CI (GitHub faturalandırma kilidi, `BLOCKED_EXTERNAL`); herkese açık sipariş (D-061/D-071/D-072, `PENDING_OWNER_APPROVAL`: dağıtım varsayılanı `ORDERING_ENABLED=false`, sunucuda 503); performans hedefleri (yalnız taban ölçüm); yedek saklama süresi/zamanlayıcı; soak/stress/spike; Linux SIGTERM; gerçek internet istemcileri. **Git (2026-11-08, sahip onayıyla):** iki commit (`919c7a9` feat + docs) `origin/feat/phase-3-4-complete`'e push edildi (force push yok); PR, tag, `main` birleştirmesi ve herkese açık dağıtım YAPILMADI. Drill yığını hâlâ çalışıyor (`sscommerce-stack`, sipariş kapalı); dev yığını (5433) ve dev veritabanı dokunulmadı.
 
 **Yeni/değişen yüzey (commit `919c7a9`):** `deploy/**` (Dockerfile.api/web, compose.yml + compose.perf.yml, Caddyfile, db/*, scripts/*, loadtest/*), `.dockerignore`, `.github/workflows/ci.yml`, backend `Observability/**`, `Security/ProductionConfigurationValidator.cs`, `Infrastructure/Health/BoundedWork.cs`, sipariş anahtarı, web `server/*.mjs`, `apps/web/tests/prod/**`, `playwright.prod.config.ts`, belgeler (`DEPLOYMENT`, `OPERATIONS`, `SECURITY_REVIEW_PHASE_9`, `PHASE_9_VERIFICATION`, `SSCOMMERCE_LEARNING_MAP`, `RELEASE_NOTES`), `DECISIONS` D-077..D-086. Kök referans PNG stage edilmez.
+
+## Faz sonrası: frontend modüler yapı (2026-11-08, D-087)
+
+**Durum: `LOCAL_PASS` · commit edilmedi.** Kullanıcı isteğiyle `apps/web/src` düz `components/` + `lib/` yapısından `features/<özellik>/` modüllerine taşındı (saf taşıma, `git mv`; davranış değişmedi). Yeni yapı ve izin tablosu: `docs/ARCHITECTURE.md` "Frontend". Sınırlar `eslint.config.mjs` `import/no-restricted-paths` ile zorlanır; negatif kanıt: `features/orders` içinden `@/features/cart/cart` ve `lib/format.ts` içinden özellik import'u lint hatası verdi, geri alındı.
+
+Doğrulama: typecheck 0 hata · lint 0 hata · build başarılı · test:server 40/0 · test:e2e 213/0 (temiz tam koşu). Not: ayrı bir tam koşuda 3 `admin-responsive` testi 60 sn zaman aşımına düştü (4 worker + Docker yükünde 390px testi tek başına 57,7 sn; sınırda, kod kaynaklı değil, testler gevşetilmedi) → olası flaky, izlenecek. Git: 90 dosya (14 R, 43 R+import, 33 yalnız import), yeni dosya yok.
+
+## MD-1 Favoriler (2026-11-08, D-088) — `LOCAL_PASS` · commit edilmedi
+
+Plan/sözleşme: `docs/PLAN_CUSTOMER_EXPERIENCE.md`. Domain `CustomerFavorite`, tablo `customer_favorites` (migration `20261108091650_AddCustomerFavorites`, yalnız ekleyici), API `/api/v1/favorites`, web `features/favorites` + `/favorilerim`, Header/BottomNav/ProductCard'daki pasif "Yakında" kalpler gerçek oldu (D-023 favori kısmı kapandı).
+
+Doğrulama: backend tam suite 2363/0/0 (gerçek PostgreSQL 17, tek kullanımlık sunucu) + QA düzeltmelerinden sonra `Favorite|CartSecurity` 75/0/0 (429 hız sınırı ve kanonik guid testleri eklendi) · web typecheck 0, lint 0 (yeni sınır negatif kanıtlı), test:server 41/0, test:e2e 221/0/0 (taban 213 + 8) · Release build 0 hata. Eşzamanlılık: 99'dayken 5 paralel farklı ürün → tam 1 kabul, toplam 100.
+QA (backend): PASS_WITH_FINDINGS, yalnız Low; 429 testi ve `TryParseExact("D")` düzeltildi. Kabul edilen Low: ürün görünürlük kontrolü kilit dışında (pasifleşme anında eklenen ürün listede `available:false`, zararsız). Flaky: ilk E2E koşularında hidrasyon öncesi tuş basışı kayboluyordu (gerçek kullanıcı sorunu) → kalp hidrasyona kadar `disabled`; sonra tam koşu ve 2× tekrar temiz.
+Dev DB: 2026-11-08 yedek `%LOCALAPPDATA%\SSCommerce\backups\sscommerce-dev-20261108T101320Z-before-favorites.dump` (PGDMP, 23 tablo verisi) → migration soketten uygulandı; geçmiş 7, ürün 10 değişmedi. Açık: `available:false` satırının E2E'si yok (ürün pasifleştirme fixture'ı gerekir; API testleri kapsıyor). Çalışan dev API (12:00'de başlatılan) eski koddur: favoriler için `.\dev` yeniden başlatılmalı.
+
+## MD-2 Profil (2026-11-08, D-089..D-091) — `LOCAL_PASS` · commit edilmedi
+
+Ortak hesap menüsü (Özet · Siparişlerim · Favorilerim · Adreslerim · Güvenlik), özet sayfası (üyelik künyesi, sayılar, son 3 sipariş), `/hesabim/guvenlik` parola değiştirme; `POST /auth/password`, `createdAt`. Şema değişikliği yok.
+
+Doğrulama: backend TEK birleşik tam koşu 2409/0/0 (gerçek PostgreSQL 17, varsayılan Release çıktısı; Auth 213/0/0 + QA sonrası 3 tahmin-kanalı regresyon testi ve log ayrımı) · web typecheck 0, lint 0 (account → orders sınırı negatif kanıtlı), test:server 41/0, test:e2e 238/0/0 (taban 221 + 17) · 390px gerçek backend ekran görüntüsüyle gözle kontrol.
+QA (backend): PASS_WITH_FINDINGS, yalnız Low. Uygulanan: başarısız parola değiştirme denemeleri logda girişten ayrı; tahmin kanalı yok regresyonu. Kabul: paralel yanlış denemelerde kilit öncesi fazladan tahmin (login ile aynı, IP hız sınırıyla sınırlı), yarış kaybedeninin nadiren 400 alması (parola değişmez).
+E2E'nin yakaladığı gerçek hata: çıkış → aynı sekmede yeniden giriş → `/hesabim` "giriş yap" gösteriyordu (önbellekteki rota durumu); kod düzeltildi, 6 mevcut test yeşile döndü. Ek: sipariş/admin/checkout saatleri İstanbul saatine geçti. Açık (MD-3'te düzeltiliyor): 390px'te hesap menüsü sol kenar boşluğu; favori deposunda okuma/yazma yarışı.
+
+## MD-3 Detay sayfaları (2026-11-08) — `LOCAL_PASS` · commit edilmedi
+
+Ürün galerisi, ürün sayfasında kalp, teslimat/iptal bloğu, benzer ürünler, mobil sabit sepete ekle çubuğu; sipariş detayında zaman çizelgesi; AccountNav 390px kenar boşluğu; favori deposu okuma/yazma yarışı düzeltildi (`features/favorites/sync.ts`, `tests/server/favorites-sync.test.mjs` 8 deterministik test). Backend değişikliği yok. Yeni Playwright projesi `product-detail` (vitrine kendi kategori/ürünlerini yazdığı için tek worker, `admin-limits`'ten sonra).
+
+Doğrulama: typecheck 0, lint 0, test:server 49/0, tam test:e2e 251/0/0 (taban 238 + 13), çubuk testleri `--repeat-each=3` 48/0. 390 ve 1280px gerçek backend ekran görüntüleriyle gözle kontrol (ana ajan inceledi).
+E2E/gözle bulunan gerçek hatalar: çubuğun opaklık geçişi sırasında axe kontrast ihlali (yalnız kaydırma geçişine çevrildi); çubuk sayfa açılışında ürün başlığını örtüyordu (kural "form görünmüyor" yerine "form geçildi" oldu; IntersectionObserver ani atlamaları kaçırdığı için scroll/resize + ResizeObserver). Not: kısa sayfalarda çubuğun görünür aralığı kısadır (footer görününce gizlenir). MD-4 yasal sayfalar ürün sahibinin metinlerini bekliyor.
