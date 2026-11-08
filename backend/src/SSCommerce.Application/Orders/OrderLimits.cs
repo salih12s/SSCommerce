@@ -13,6 +13,14 @@ public sealed class OrderLimitOptions
     public const int DefaultMaxOpenOrdersPerUser = 3;
     public const int DefaultMaxOrdersPerRollingDay = 10;
 
+    /// <summary>
+    /// Sipariş verme anahtarı (Faz 9, <c>Ordering:Enabled</c>). KOD varsayılanı <c>true</c>. <c>false</c> iken <c>POST /api/v1/orders</c> sunucuda 503
+    /// <c>ordering_disabled</c> ile reddedilir; stoğa, sepete ve veritabanına (kilit dahil) hiç dokunulmaz, Idempotency-Key tüketilmez.
+    /// Sipariş okuma uçları, müşteri iptali ve personel yönetimi ÇALIŞMAYA DEVAM EDER. Değer dosya yapılandırmasında canlı okunur
+    /// (<c>IOptionsMonitor</c>); ortam değişkeniyle verilirse yeniden başlatma gerekir.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
     /// <summary>Aynı anda açık (placed + processing) olabilecek en çok sipariş. Aşılırsa 409 <c>open_order_limit</c>.</summary>
     public int MaxOpenOrdersPerUser { get; set; } = DefaultMaxOpenOrdersPerUser;
 

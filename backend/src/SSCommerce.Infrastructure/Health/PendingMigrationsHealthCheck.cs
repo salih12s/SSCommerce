@@ -39,18 +39,40 @@ public sealed class PendingMigrationsHealthCheck(
             return HealthCheckResult.Unhealthy("Veritabanı bağlantısı yapılandırılmamış.");
         }
 
+        // Kapsam (ve DbContext) işin KENDİSİ bitince bırakılır: sınır dolup iş koparılsa bile sızıntı olmaz. İş başlamadan önce atan yolda burada bırakılır.
+        var scope = scopeFactory.CreateAsyncScope();
+        var handedOff = false;
         try
         {
-            await using var scope = scopeFactory.CreateAsyncScope();
-
             // D-065: kesilemeyen YEREL iş (DbContext çözümü, modelin kurulması) sayaç başlamadan ÖNCE biter. Sayaç yalnız veritabanına sorulan
             // süreyi ölçer; aksi halde EF'in ilk kullanım maliyeti, veritabanı hiç sorulmadan "zaman aşımı" diye raporlanırdı.
             var db = scope.ServiceProvider.GetRequiredService<SSCommerceDbContext>();
             _ = db.Model;
 
-            using var budget = new CancellationTokenSource(PostgresReadinessHealthCheck.Timeout, timeProvider);
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, budget.Token);
-            var pending = (await db.Database.GetPendingMigrationsAsync(timeout.Token)).Count();
+            // Kesin duvar saati sınırı (bkz. BoundedWork): sayaç yukarıdaki yerel işten SONRA kurulur (BoundedWork.RunAsync içinde Task.Delay burada başlar).
+            handedOff = true;
+            var (completed, pendingCount) = await BoundedWork.RunAsync(
+                async token =>
+                {
+                    try
+                    {
+                        return (await db.Database.GetPendingMigrationsAsync(token)).Count();
+                    }
+                    finally
+                    {
+                        await scope.DisposeAsync();
+                    }
+                },
+                PostgresReadinessHealthCheck.Timeout,
+                timeProvider,
+                cancellationToken);
+            if (!completed)
+            {
+                logger.LogWarning("Migration denetimi {Seconds} sn içinde tamamlanamadı.", PostgresReadinessHealthCheck.Timeout.TotalSeconds);
+                return HealthCheckResult.Unhealthy("Migration durumu okunamadı.");
+            }
+
+            var pending = pendingCount;
             if (pending > 0)
             {
                 logger.LogWarning("Bekleyen veritabanı migration sayısı: {PendingCount}", pending);
@@ -69,6 +91,13 @@ public sealed class PendingMigrationsHealthCheck(
         {
             logger.LogWarning("Migration denetimi başarısız: {ExceptionType}", ex.GetType().Name);
             return HealthCheckResult.Unhealthy("Migration durumu okunamadı.");
+        }
+        finally
+        {
+            if (!handedOff)
+            {
+                await scope.DisposeAsync();
+            }
         }
     }
 }

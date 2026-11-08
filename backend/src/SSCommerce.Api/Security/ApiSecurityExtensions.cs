@@ -1,11 +1,13 @@
 using System.Globalization;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using SSCommerce.Api.Errors;
 using SSCommerce.Infrastructure.Identity;
@@ -19,6 +21,10 @@ public static class ApiSecurityExtensions
     {
         services.AddOptions<SecurityOptions>().BindConfiguration(SecurityOptions.SectionName);
         services.AddKeyPersistence();
+
+        // Üretim fail-fast (Faz 9, B5): Production/Staging'de eksik/güvensiz yapılandırma açılışta uygulamayı durdurur.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<ProductionStartupCheck>, ProductionConfigurationValidator>());
+        services.AddOptions<ProductionStartupCheck>().ValidateOnStart();
 
         // --- Cookie oturumu: Identity'nin uygulama cookie'si ---
         services.AddAuthentication(IdentityConstants.ApplicationScheme).AddIdentityCookies();
@@ -114,10 +120,37 @@ public static class ApiSecurityExtensions
             // Filtrelerin bu grupta olduğunu uç noktadan okunabilir kılan işaret: mimari test, grup DIŞINA düşen yazma uçlarını yakalar.
             .WithMetadata(RequestProtectionMetadata.Instance);
 
+    /// <summary>
+    /// Hız sınırı kovası anahtarı (Faz 9, güvenlik denetimi B1). IPv4-mapped IPv6 (`::ffff:a.b.c.d`) IPv4'e indirilir; IPv6 adresleri /64 önekiyle gruplanır:
+    /// bir istemci/abone tipik olarak tüm /64 bloğunu elinde tutar ve blok içinde adres döndürerek tam-adres kovasını sınırsız çoğaltabilirdi (parola deneme sınırını aşmak).
+    /// </summary>
+    public static string RateLimitKey(IPAddress? address)
+    {
+        if (address is null)
+        {
+            return "unknown";
+        }
+
+        if (address.IsIPv4MappedToIPv6)
+        {
+            address = address.MapToIPv4();
+        }
+
+        if (address.AddressFamily != AddressFamily.InterNetworkV6)
+        {
+            return address.ToString();
+        }
+
+        Span<byte> bytes = stackalloc byte[16];
+        address.TryWriteBytes(bytes, out _);
+        bytes[8..].Clear();
+        return new IPAddress(bytes).ToString() + "/64";
+    }
+
     private static RateLimitPartition<string> PartitionByIp(HttpContext context, Func<RateLimitSettings, int> permitLimit)
     {
         var settings = context.RequestServices.GetRequiredService<IOptions<SecurityOptions>>().Value.RateLimit;
-        var key = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var key = RateLimitKey(context.Connection.RemoteIpAddress);
         return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = Math.Max(1, permitLimit(settings)),

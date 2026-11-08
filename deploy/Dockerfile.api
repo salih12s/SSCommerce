@@ -1,0 +1,61 @@
+# syntax=docker/dockerfile:1
+# SSCommerce API + şema göçü imajları. Bağlam: depo kökü.   docker build -f deploy/Dockerfile.api --target api .
+# Temel imajlar etiket + digest ile sabittir (yeniden üretilebilirlik). Güncelleme: docs/DEPLOYMENT.md "Temel imaj güncelleme".
+ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0-alpine@sha256:5562fd626eec39f6f53218f9b7d7856ab7195d51d846568304fbe85071a3b6e6
+ARG ASPNET_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0-alpine@sha256:486297ae006e95ee2ee3112a2c03e3d26e41fbbc64b7a29e28e7a18cc36b12bb
+ARG POSTGRES_IMAGE=postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+
+FROM ${SDK_IMAGE} AS restore
+WORKDIR /src
+COPY global.json ./
+COPY .config/dotnet-tools.json .config/dotnet-tools.json
+COPY backend/Directory.Build.props backend/Directory.Packages.props backend/
+COPY backend/src/SSCommerce.Domain/SSCommerce.Domain.csproj backend/src/SSCommerce.Domain/
+COPY backend/src/SSCommerce.Application/SSCommerce.Application.csproj backend/src/SSCommerce.Application/
+COPY backend/src/SSCommerce.Infrastructure/SSCommerce.Infrastructure.csproj backend/src/SSCommerce.Infrastructure/
+COPY backend/src/SSCommerce.Api/SSCommerce.Api.csproj backend/src/SSCommerce.Api/
+RUN dotnet restore backend/src/SSCommerce.Api/SSCommerce.Api.csproj && dotnet tool restore
+
+FROM restore AS build
+ARG BUILD_VERSION=0.0.0-local
+ARG GIT_SHA=unknown
+COPY backend/src backend/src
+# DİKKAT: ARG adı "VERSION" OLMAZ: Docker onu ortam değişkeni yapar, MSBuild da $(Version) özelliği sanıp NETSDK1018 verir. Geçerli SemVer değilse "0.0.0-" öneki eklenir.
+RUN V="${BUILD_VERSION}"; case "$V" in [0-9]*) ;; *) V="0.0.0-${V}" ;; esac; \
+    dotnet publish backend/src/SSCommerce.Api/SSCommerce.Api.csproj -c Release -o /out --no-restore \
+      -p:UseAppHost=false -p:InformationalVersion="${V}+${GIT_SHA}"
+
+# Şema betiği: idempotent EF migration SQL'i. Veritabanına BAĞLANMAZ; bağlantı dizesi yalnız host kurulumu içindir (sahte, sır değil).
+FROM build AS schema
+RUN ASPNETCORE_ENVIRONMENT=Development ConnectionStrings__Postgres="Host=none;Database=none;Username=none;Password=none" \
+    dotnet dotnet-ef migrations script --idempotent --no-build --configuration Release \
+      --project backend/src/SSCommerce.Infrastructure --startup-project backend/src/SSCommerce.Api \
+      --output /out/schema.sql \
+ && test -s /out/schema.sql
+
+# --- Çalışma imajı: API ---
+FROM ${ASPNET_IMAGE} AS api
+ARG BUILD_VERSION=0.0.0-local
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="sscommerce-api" org.opencontainers.image.version="${BUILD_VERSION}" org.opencontainers.image.revision="${GIT_SHA}"
+# icu-libs: kültüre duyarlı karşılaştırmalar geliştirmedeki gibi davranır (invariant mod KAPALI). tzdata: UTC dışı hesap gerekmez ama zararsız.
+RUN apk add --no-cache icu-libs tzdata \
+ && mkdir -p /keys && chown app:app /keys
+ENV ASPNETCORE_ENVIRONMENT=Production \
+    DOTNET_EnableDiagnostics=0 \
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false \
+    DOTNET_gcServer=0
+WORKDIR /app
+COPY --from=build --chown=app:app /out ./
+USER app
+VOLUME ["/keys"]
+ENTRYPOINT ["dotnet", "SSCommerce.Api.dll"]
+
+# --- Şema göçü işi: postgres istemcisi + idempotent betik + yetki betiği. Uygulama kodu YOK. ---
+FROM ${POSTGRES_IMAGE} AS migrate
+LABEL org.opencontainers.image.title="sscommerce-migrate"
+COPY --from=schema /out/schema.sql /migrations/schema.sql
+COPY deploy/db/post-migrate.sql /migrations/post-migrate.sql
+COPY deploy/db/migrate.sh /migrations/migrate.sh
+USER postgres
+ENTRYPOINT ["sh", "/migrations/migrate.sh"]

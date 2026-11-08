@@ -1,0 +1,87 @@
+# TLS sonlandıran ters proxy (kenar). YEREL doğrulama: `tls internal` = Caddy'nin YEREL CA'sı; herkese açık güvenilir sertifika DEĞİLDİR.
+# Gerçek alan adında: site adresini alan adıyla değiştir, `tls internal` satırını SİL (Let's Encrypt/ZeroSSL otomatik), portları 80/443 yap.
+{
+	admin off
+	skip_install_trust
+	# HTTP->HTTPS yönlendirmesi aşağıda AÇIKÇA tanımlıdır (yerel standart dışı port Location'a yazılabilsin).
+	auto_https disable_redirects
+	http_port {$EDGE_HTTP_PORT:8080}
+	https_port {$EDGE_HTTPS_PORT:8443}
+	# X-Forwarded-For'a hiçbir istemci güvenilmez: Caddy kendi gördüğü eş adresini yazar (trusted_proxies YOK).
+}
+
+# Gerçek alan adında EDGE_PORT_SUFFIX boş bırakılır (80/443).
+http://{$EDGE_SITE:localhost}:{$EDGE_HTTP_PORT:8080} {
+	redir https://{$EDGE_SITE:localhost}{$EDGE_PORT_SUFFIX::8443}{uri} 308
+}
+
+{$EDGE_SITE:localhost}:{$EDGE_HTTPS_PORT:8443} {
+	tls internal
+
+	encode zstd gzip
+
+	# İstemcinin gönderdiği X-Request-Id ASLA taşınmaz: kenar kendisi üretir (tüm zincirde korelasyon).
+	request_header X-Request-Id "{http.request.uuid}"
+	request_body {
+		max_size 1MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age={$HSTS_MAX_AGE:300}"
+		-Server
+		-X-Powered-By
+	}
+
+	# İç uçlar internete AÇILMAZ: API sağlık/metrik/OpenAPI Next rewrite'ı (/api/backend/*) üzerinden de erişilemez.
+	@internal path /api/backend/health /api/backend/health/* /api/backend/metrics /api/backend/metrics* /api/backend/openapi* /openapi* /metrics /metrics/*
+	handle @internal {
+		respond "Bulunamadı" 404
+	}
+
+	handle /edge-health {
+		header Cache-Control "no-store"
+		respond "ok" 200
+	}
+
+	handle {
+		reverse_proxy {$WEB_UPSTREAM:172.28.77.11:3000} {
+			health_uri /healthz
+			health_interval 3s
+			health_timeout 2s
+			# Yeniden başlatma/dağıtım sırasında ağ hatalarını kısa süre yeniden dene (tek yukarı akış).
+			lb_try_duration 8s
+			lb_try_interval 250ms
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 15s
+			}
+		}
+	}
+
+	# Yukarı akış (web) ulaşılamaz/zaman aşımına uğrarsa API yolunda istemci HER ZAMAN aynı güvenli 503 problem+json'u görür (502/504 değil, ayrıntı yok).
+	handle_errors {
+		@upstream_down {
+			path /api/backend/*
+			expression {http.error.status_code} in [502, 503, 504]
+		}
+		handle @upstream_down {
+			header Content-Type "application/problem+json; charset=utf-8"
+			header Retry-After "5"
+			header Cache-Control "no-store"
+			respond `{"type":"https://tools.ietf.org/html/rfc9110#section-15.6.4","title":"Hizmet şu an kullanılamıyor. Lütfen biraz sonra tekrar deneyin","status":503,"code":"service_unavailable"}` 503
+		}
+	}
+
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				# Çerez/yetki başlıkları ve sorgu dizesi (arama metni) günlüğe YAZILMAZ.
+				request>headers delete
+				resp_headers>Set-Cookie delete
+				request>uri regexp \?.* ""
+			}
+		}
+	}
+}

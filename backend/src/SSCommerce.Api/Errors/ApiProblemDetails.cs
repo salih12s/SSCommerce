@@ -61,6 +61,10 @@ public static class ApiErrorCodes
     public const string RoleSelfDemotion = "role_self_demotion";
     public const string LastAdmin = "last_admin";
 
+    // Faz 9 (işletim).
+    /// <summary>Sipariş verme anahtarı kapalı (<c>Ordering:Enabled=false</c>): 503, hiçbir şey yazılmadı.</summary>
+    public const string OrderingDisabled = "ordering_disabled";
+
     /// <summary>Kullanıcı başına kilit zaman aşımı (sepet/adres yazması): hiçbir şey yazılmadı, tekrar denenebilir.</summary>
     public const string Busy = "busy";
 

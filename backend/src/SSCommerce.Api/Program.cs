@@ -6,6 +6,7 @@ using SSCommerce.Api.Catalog;
 using SSCommerce.Api.Checkout;
 using SSCommerce.Api.Errors;
 using SSCommerce.Api.Health;
+using SSCommerce.Api.Observability;
 using SSCommerce.Api.OpenApi;
 using SSCommerce.Api.Orders;
 using SSCommerce.Api.Security;
@@ -27,8 +28,26 @@ builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = 
 builder.Services.AddOpenApi(options => options.AddCatalogQueryParameterTypes());
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApiSecurity();
+builder.Services.AddObservability();
+
+// Faz 9: Server başlığı kapalı; Metrics:Port > 0 ise iç metrik dinleyicisi ana adreslere eklenir.
+builder.ConfigureHosting();
+
+// Faz 9 (B3): Development dışında konsol günlüğü JSON (tek satır/olay, RequestId kapsamı dahil). Logging:Console:FormatterName açıkça verildiyse ona dokunulmaz.
+if (!builder.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(builder.Configuration["Logging:Console:FormatterName"]))
+{
+    builder.Logging.AddJsonConsole(options =>
+    {
+        options.IncludeScopes = true;
+        options.UseUtcTimestamp = true;
+        options.TimestampFormat = "yyyy-MM-dd'T'HH:mm:ss.fff'Z'";
+    });
+}
 
 var app = builder.Build();
+
+// Faz 9: en dış katman (güvenlik başlıkları, /metrics iç dinleyicide, X-Request-Id + telemetri + istek günlüğü).
+app.UseObservability();
 
 // Merkezi hata modeli: işlenmeyen istisna => 500, gövdesiz 4xx/5xx => RFC 9457 application/problem+json.
 app.UseApiSecurityBeforeErrors();

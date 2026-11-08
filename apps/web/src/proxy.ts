@@ -18,11 +18,13 @@ function redirectTo(request: NextRequest, path: string) {
 }
 
 // Next, rewrite yanıtının durum kodunu yok sayar (200 döner); gerçek HTTP 403 için yanıt doğrudan burada üretilir. Sayfa durağandır: kişisel veri, betik ve dış kaynak içermez.
-const FORBIDDEN_HTML = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Erişim yok | SSCommerce</title>
-<style>body{margin:0;background:#f6f1e8;color:#1b1d21;font:16px/1.55 system-ui,"Segoe UI",sans-serif}main{max-width:36rem;margin:0 auto;padding:4rem 1rem}h1{font-size:2rem;line-height:1.15;margin:1rem 0 .75rem}p{color:#5a554c}.stamp{display:inline-block;transform:rotate(-2deg);border:2px solid #a63400;border-radius:6px;padding:.1rem .6rem;font-weight:800;color:#a63400}a{display:inline-flex;align-items:center;min-height:44px;padding:0 1.25rem;margin:.5rem .75rem 0 0;border-radius:6px;font-weight:600;text-decoration:none;background:#16181b;color:#f4efe6}a.alt{background:#fffcf6;color:#1b1d21;border:1px solid #d8cebd}a:focus-visible{outline:3px solid #1b1d21;outline-offset:3px}</style></head>
+const forbiddenHtml = (nonce?: string) => `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Erişim yok | SSCommerce</title>
+<style${nonce ? ` nonce="${nonce}"` : ""}>body{margin:0;background:#f6f1e8;color:#1b1d21;font:16px/1.55 system-ui,"Segoe UI",sans-serif}main{max-width:36rem;margin:0 auto;padding:4rem 1rem}h1{font-size:2rem;line-height:1.15;margin:1rem 0 .75rem}p{color:#5a554c}.stamp{display:inline-block;transform:rotate(-2deg);border:2px solid #a63400;border-radius:6px;padding:.1rem .6rem;font-weight:800;color:#a63400}a{display:inline-flex;align-items:center;min-height:44px;padding:0 1.25rem;margin:.5rem .75rem 0 0;border-radius:6px;font-weight:600;text-decoration:none;background:#16181b;color:#f4efe6}a.alt{background:#fffcf6;color:#1b1d21;border:1px solid #d8cebd}a:focus-visible{outline:3px solid #1b1d21;outline-offset:3px}</style></head>
 <body><main><span class="stamp">403</span><h1>Bu alana erişimin yok</h1><p>Yönetim alanı yalnızca yönetici ve depo personeli içindir. Depo personeli yalnızca sipariş ekranlarını görür. Yetki gerekiyorsa hesap kimliğini Hesabım sayfasından kopyalayıp bir yöneticiye ilet.</p><a href="/hesabim">Hesabım</a><a class="alt" href="/">Mağazaya dön</a></main></body></html>`;
-function forbiddenPage() {
-  return new NextResponse(FORBIDDEN_HTML, { status: 403, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": NO_STORE } });
+// Satır içi <style> için CSP nonce'u: server.mjs isteğe `content-security-policy` başlığını yazar (Next'in kendi betikleri için yaptığı gibi).
+const cspNonce = (request: NextRequest) => /'nonce-([A-Za-z0-9+/=_-]+)'/.exec(request.headers.get("content-security-policy") ?? "")?.[1];
+function forbiddenPage(request: NextRequest) {
+  return new NextResponse(forbiddenHtml(cspNonce(request)), { status: 403, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": NO_STORE } });
 }
 
 function rolesOf(body: unknown): string[] | null {
@@ -61,7 +63,7 @@ async function guardAdmin(request: NextRequest) {
   if (roles === null) return pass();
 
   const staff = roles.filter(isStaffRole);
-  const forbidden = () => forbiddenPage();
+  const forbidden = () => forbiddenPage(request);
   if (staff.length === 0) return forbidden();
   if (!staff.includes("Admin")) {
     // Depo: yalnız sipariş ekranları. /admin kökü sipariş listesine gider.

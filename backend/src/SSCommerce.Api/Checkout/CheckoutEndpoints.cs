@@ -1,8 +1,10 @@
 using System.Security.Claims;
+using Microsoft.Extensions.Options;
 using SSCommerce.Api.Errors;
 using SSCommerce.Api.Http;
 using SSCommerce.Api.Security;
 using SSCommerce.Application.Checkout;
+using SSCommerce.Application.Orders;
 
 namespace SSCommerce.Api.Checkout;
 
@@ -39,6 +41,7 @@ public static class CheckoutEndpoints
         HttpContext http,
         ClaimsPrincipal user,
         ICheckoutPreviewService preview,
+        IOptionsMonitor<OrderLimitOptions> ordering,
         CancellationToken cancellationToken)
     {
         var (body, bodyError) = await JsonRequestBody.ReadAsync<CheckoutPreviewRequest>(http.Request, JsonRequestBody.DefaultMaxBytes, cancellationToken);
@@ -55,7 +58,8 @@ public static class CheckoutEndpoints
         var result = await preview.PreviewAsync(user.GetUserId(), addressId, cancellationToken);
         return result.Status switch
         {
-            CheckoutPreviewStatus.Ok => Results.Ok(result.Preview),
+            // orderingAvailable sipariş anahtarını (Ordering:Enabled) yansıtır; şema aynıdır.
+            CheckoutPreviewStatus.Ok => Results.Ok(result.Preview! with { OrderingAvailable = ordering.CurrentValue.Enabled }),
             CheckoutPreviewStatus.CartEmpty => ApiResults.Problem(StatusCodes.Status409Conflict, "Sepet boş", ApiErrorCodes.CartEmpty),
             CheckoutPreviewStatus.AddressNotFound => ApiResults.Problem(StatusCodes.Status404NotFound, "Adres bulunamadı", ApiErrorCodes.AddressNotFound),
             CheckoutPreviewStatus.TotalTooLarge => ApiResults.Problem(

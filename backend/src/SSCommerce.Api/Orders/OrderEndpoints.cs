@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using Microsoft.Extensions.Options;
+using SSCommerce.Api.Observability;
 using SSCommerce.Api.Errors;
 using SSCommerce.Api.Http;
 using SSCommerce.Api.Inventory;
@@ -34,7 +36,7 @@ public static class OrderEndpoints
                 "Hatalar: 404 address_not_found; 409 cart_empty, cart_total_too_large, order_item_inactive (itemIds), order_quote_changed, insufficient_stock (itemIds), " +
                 "open_order_limit (limit; açık placed+processing sipariş sayısı üst sınırda); 429 order_daily_limit (limit + Retry-After; son 24 saatte durumdan bağımsız sipariş sayısı üst sınırda, " +
                 "IP hız sınırlayıcının rate_limited kodundan ayrıdır); " +
-                "503 busy (hiçbir şey yazılmadı, aynı anahtarla tekrar denenir). Reddedilen istek anahtarı tüketmez; replay'ler (200) sınıra sayılmaz.")
+                "503 busy (hiçbir şey yazılmadı, aynı anahtarla tekrar denenir); 503 ordering_disabled (Ordering:Enabled=false: hiçbir şey yazılmadı, anahtar tüketilmedi). Reddedilen istek anahtarı tüketmez; replay'ler (200) sınıra sayılmaz.")
             .Accepts<PlaceOrderRequest>("application/json")
             .RequireRateLimiting(RateLimitPolicies.Mutation)
             .Produces<OrderDto>(StatusCodes.Status201Created)
@@ -149,19 +151,52 @@ public static class OrderEndpoints
         HttpContext http,
         ClaimsPrincipal user,
         IOrderPlacementService placement,
+        IOptionsMonitor<OrderLimitOptions> ordering,
+        SscMetrics metrics,
         CancellationToken cancellationToken)
     {
-        var (body, bodyError) = await JsonRequestBody.ReadAsync<PlaceOrderRequest>(http.Request, JsonRequestBody.DefaultMaxBytes, cancellationToken);
-        if (body is null)
+        // Sipariş anahtarı (Faz 9, Ordering:Enabled): KAPALIYKEN hiçbir şeye dokunmadan (gövde okuma, doğrulama, kilit, veritabanı) 503.
+        // Idempotency-Key tüketilmez; kapı açılınca aynı anahtarla yeniden denenebilir.
+        if (!ordering.CurrentValue.Enabled)
         {
-            return ApiResults.ValidationFailed(bodyError!);
+            metrics.RecordOrder(OrderOutcomes.OrderingDisabled);
+            return OrderingDisabled();
         }
 
-        var validation = OrderRequestValidator.ValidatePlace(body, IdempotencyKey(http.Request), user.GetUserId());
-        return validation.IsValid
-            ? ToResult(await placement.PlaceAsync(validation.Value!, cancellationToken))
-            : ApiResults.ValidationFailed(validation.Errors);
+        try
+        {
+            var (body, bodyError) = await JsonRequestBody.ReadAsync<PlaceOrderRequest>(http.Request, JsonRequestBody.DefaultMaxBytes, cancellationToken);
+            if (body is null)
+            {
+                metrics.RecordOrder(OrderOutcomes.OtherError);
+                return ApiResults.ValidationFailed(bodyError!);
+            }
+
+            var validation = OrderRequestValidator.ValidatePlace(body, IdempotencyKey(http.Request), user.GetUserId());
+            if (!validation.IsValid)
+            {
+                metrics.RecordOrder(OrderOutcomes.OtherError);
+                return ApiResults.ValidationFailed(validation.Errors);
+            }
+
+            // Sonuç servis çıkışında sınıflanır (servis değişmedi); işlenmeyen istisna other_error sayılır ve yeniden fırlatılır (500/503 eşlemesi aynı kalır).
+            var result = await placement.PlaceAsync(validation.Value!, cancellationToken);
+            metrics.RecordOrder(OrderOutcomes.From(result));
+            return ToResult(result);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            metrics.RecordOrder(OrderOutcomes.OtherError);
+            throw;
+        }
     }
+
+    private static IResult OrderingDisabled() =>
+        ApiResults.Problem(StatusCodes.Status503ServiceUnavailable, "Siparişler şu an geçici olarak kapalı", ApiErrorCodes.OrderingDisabled);
 
     private static async Task<IResult> List(
         ClaimsPrincipal user,

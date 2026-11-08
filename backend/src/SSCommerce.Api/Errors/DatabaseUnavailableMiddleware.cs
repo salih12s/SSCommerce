@@ -1,5 +1,6 @@
 using System.Net.Sockets;
 using Npgsql;
+using SSCommerce.Api.Observability;
 
 namespace SSCommerce.Api.Errors;
 
@@ -67,7 +68,7 @@ public static class DatabaseFailures
 /// <c>Retry-After</c>, ayrıntı yok. Hata işleyicisinin (UseExceptionHandler) İÇİNDE durur ve kimlik doğrulamayı da sarar; böylece istisna, tam istisna
 /// metnini yazan genel hata günlüğüne hiç ulaşmaz. Burada YALNIZ istisna tipi loglanır (Npgsql iletileri host/port içerebilir).
 /// </summary>
-public sealed class DatabaseUnavailableMiddleware(RequestDelegate next, ILogger<DatabaseUnavailableMiddleware> logger)
+public sealed class DatabaseUnavailableMiddleware(RequestDelegate next, ILogger<DatabaseUnavailableMiddleware> logger, SscMetrics metrics)
 {
     public const int RetryAfterSeconds = 5;
 
@@ -80,6 +81,7 @@ public sealed class DatabaseUnavailableMiddleware(RequestDelegate next, ILogger<
         catch (Exception exception) when (!context.Response.HasStarted && DatabaseFailures.IsUnavailable(exception))
         {
             logger.LogWarning("Veritabanına ulaşılamadı ({ExceptionType}); 503 dönüldü.", ExceptionType(exception));
+            metrics.RecordDatabaseUnavailable();
             context.Response.Clear();
             context.Response.Headers.RetryAfter = RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
             await ApiResults.Problem(

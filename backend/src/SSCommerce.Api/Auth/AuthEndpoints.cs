@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
 using SSCommerce.Api.Errors;
@@ -29,7 +30,20 @@ public static class AuthEndpoints
     private const int MaxPasswordLength = 128;
     private const int MaxBodyBytes = 4096;
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
+
+    /// <summary>
+    /// Kayıt yanıtında <c>Results.Json(value, options)</c> ile verilen PAYLAŞILAN seçenekler. Dondurulmamış bir <c>JsonSerializerOptions</c> ilk kullanımda
+    /// <c>TypeInfoResolver</c> yazılarak değiştirilir; süreç yeni başlamışken eşzamanlı iki istek yarışırsa biri
+    /// "This JsonSerializerOptions instance is read-only or has already been used" ile HTTP 500 alırdı (Faz 9 yük testi S4: 120 kayıttan 1'i).
+    /// Çözümleyici baştan verilir ve seçenekler salt okunur yapılır: ilk istekte yazılacak durum kalmaz.
+    /// </summary>
+    public static JsonSerializerOptions CreateJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = new DefaultJsonTypeInfoResolver() };
+        options.MakeReadOnly();
+        return options;
+    }
 
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder api)
     {
