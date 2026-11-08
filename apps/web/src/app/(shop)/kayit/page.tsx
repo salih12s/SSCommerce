@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { AuthForm } from "@/components/AuthForm";
+import { AuthForm } from "@/features/auth/components/AuthForm";
 import { safeNext } from "@/lib/safe-next";
 export const metadata: Metadata = { title: "Kayıt ol" };
 // `next` yalnızca aynı site içi göreli yol olabilir (safeNext); aksi hâlde /hesabim'e düşer.

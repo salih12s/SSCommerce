@@ -775,3 +775,19 @@ for (const vp of viewports) {
     } finally { await restore(request, v, w); }
   });
 }
+
+test("MD-2 hesap özeti: gerçek sipariş sayısı ve son siparişler /hesabim'de görünür; satır sipariş ayrıntısına gider", async ({ page, request, baseURL }) => {
+  const v = v12(2);
+  try {
+    const { address } = await prepare(page, baseURL!, [[v, 1]]);
+    const placed = await placeOrderApi(page.request, baseURL!, address.id);
+    await page.goto("/hesabim");
+    await expect(page.getByTestId("tally-orders")).toHaveText("1");
+    await expect(page.getByTestId("recent-order-row")).toHaveCount(1);
+    const row = page.getByTestId("recent-order-row").first();
+    await expect(row).toContainText(placed.orderNumber);
+    await expect(row.getByTestId("order-status")).toHaveText("Alındı");
+    await row.getByRole("link").click();
+    await expect(page).toHaveURL(new RegExp(`/siparisler/${placed.id}$`));
+  } finally { await restore(request, v); }
+});

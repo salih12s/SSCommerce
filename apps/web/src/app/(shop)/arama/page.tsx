@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { ProductCard } from "@/components/ProductCard";
-import { getCategories, getProducts } from "@/lib/catalog";
+import { ProductCard } from "@/features/catalog/components/ProductCard";
+import { getCategories, getProducts } from "@/features/catalog/catalog";
 
 export const metadata: Metadata = { title: "Ürün ara", description: "SSCommerce demo ürünlerini kategori, fiyat ve adla arayın.", alternates: { canonical: "/arama" } };
 type Query = Record<string, string | string[] | undefined>;

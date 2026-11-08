@@ -24,7 +24,7 @@ export default defineConfig({
   // Not: Playwright worker sayısı proje başına ayarlanamaz; tek worker garantisi "tek dosya + serial mod" ile sağlanır.
   projects: [
     // admin-access ve admin-responsive paylaşılan kataloğu yalnız okur (kendi hesaplarını kurar), bu yüzden main'dedir. Diğer admin-* dosyaları katalog/stok yazar: aşağıda zincirlenir.
-    { name: "main", testIgnore: /(mutations|orders|admin-catalog|admin-stock|admin-fulfilment|admin-limits)\.spec\.ts/ },
+    { name: "main", testIgnore: /(mutations|orders|admin-catalog|admin-stock|admin-fulfilment|admin-limits|product-detail)\.spec\.ts/ },
     { name: "mutating", testMatch: /mutations\.spec\.ts/, dependencies: ["main"], fullyParallel: false },
     // Siparişler stok TÜKETİR: tek dosya, yalnız main ve mutating bittikten sonra, tek worker'da sırayla koşar. Her test kullandığı stoğu fixture ile geri koyar.
     { name: "ordering", testMatch: /orders\.spec\.ts/, dependencies: ["mutating"], fullyParallel: false },
@@ -34,6 +34,8 @@ export default defineConfig({
     { name: "admin-stock", testMatch: /admin-stock\.spec\.ts/, dependencies: ["admin-catalog"], fullyParallel: false },
     { name: "admin-fulfilment", testMatch: /admin-fulfilment\.spec\.ts/, dependencies: ["admin-stock"], fullyParallel: false },
     { name: "admin-limits", testMatch: /admin-limits\.spec\.ts/, dependencies: ["admin-fulfilment"], fullyParallel: false },
+    // MD-3 ürün/sipariş ayrıntı sayfaları: kendi kategorilerini ve ürünlerini yönetim API'siyle kurar (vitrin kataloğuna yazar), bu yüzden en sonda ve tek worker'da koşar.
+    { name: "product-detail", testMatch: /product-detail\.spec\.ts/, dependencies: ["admin-limits"], fullyParallel: false },
   ],
   webServer: {
     // Sunucu mevcut üretim derlemesini 3200'de açar: yerelde `npm run test:e2e` önce build alır,

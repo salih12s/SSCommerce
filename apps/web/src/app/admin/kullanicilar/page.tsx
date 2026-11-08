@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { UsersAdmin } from "@/components/admin/UsersAdmin";
+import { UsersAdmin } from "@/features/admin/components/UsersAdmin";
 
 export const metadata: Metadata = { title: "Kullanıcılar" };
 export default function AdminUsersPage() { return <UsersAdmin />; }

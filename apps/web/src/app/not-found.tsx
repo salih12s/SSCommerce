@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { StoreShell } from "@/components/StoreShell";
-import { btnPrimary } from "@/components/ui";
+import { StoreShell } from "@/features/shell/components/StoreShell";
+import { btnPrimary } from "@/components/ui/styles";
 
 export default function NotFound() {
   return (

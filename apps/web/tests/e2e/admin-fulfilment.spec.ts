@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { formatPriceMinor } from "../../src/lib/format";
-import type { AuditRow, Movement, Paged } from "../../src/lib/admin/types";
+import type { AuditRow, Movement, Paged } from "../../src/features/admin/types";
 import { actor, adminOrder, aGet, aProblem, customerWithOrder, dashboardApi, mkSellable, publicAvailable, retire, settled, type Actor, type Sellable } from "./admin-support";
 import { api, axeSerious, goodAddress, noHorizontalOverflow, send, viewports } from "./support";
 

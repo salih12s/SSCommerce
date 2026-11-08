@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Banners } from "@/components/Banners";
-import { CategoryCard } from "@/components/CategoryCard";
-import { Hero } from "@/components/Hero";
-import { ProductCard } from "@/components/ProductCard";
-import { ProductTabs, type TabDef, type TabItem } from "@/components/ProductTabs";
-import { ServiceStrip } from "@/components/ServiceStrip";
+import { Banners } from "@/features/home/components/Banners";
+import { CategoryCard } from "@/features/catalog/components/CategoryCard";
+import { Hero } from "@/features/home/components/Hero";
+import { ProductCard } from "@/features/catalog/components/ProductCard";
+import { ProductTabs, type TabDef, type TabItem } from "@/features/catalog/components/ProductTabs";
+import { ServiceStrip } from "@/features/home/components/ServiceStrip";
 import { categories } from "@/content/demo-catalog";
-import { getCategories, getProducts } from "@/lib/catalog";
+import { getCategories, getProducts } from "@/features/catalog/catalog";
 
 const gridClass = "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-6";
 

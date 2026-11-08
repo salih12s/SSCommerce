@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { AdminShell } from "@/components/admin/AdminShell";
+import { AdminShell } from "@/features/admin/components/AdminShell";
 
 export const metadata: Metadata = {
   title: { default: "Yönetim", template: "%s | SSC Yönetim" },

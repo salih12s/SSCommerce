@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { ProductCard } from "@/components/ProductCard";
+import { ProductCard } from "@/features/catalog/components/ProductCard";
 import { categories } from "@/content/demo-catalog";
-import { getCategories, getProducts } from "@/lib/catalog";
+import { getCategories, getProducts } from "@/features/catalog/catalog";
 
 export function generateStaticParams() { return categories.map((c) => ({ slug: c.slug })); }
 export async function generateMetadata({ params }: PageProps<"/kategori/[slug]">): Promise<Metadata> {

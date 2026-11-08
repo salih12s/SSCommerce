@@ -43,6 +43,21 @@
   --text-title--letter-spacing: -0.025em;
 
   --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+
+  /* Favori kalbi eklenirken tek seferlik, kısa "oturma" (kullanıcının eylemine yanıt; azaltılmış harekette base katmanı süreyi sıfırlar). */
+  --animate-heart-pop: heart-pop 240ms var(--ease-out-strong);
+  @keyframes heart-pop {
+    0% { transform: scale(0.82); }
+    55% { transform: scale(1.14); }
+    100% { transform: scale(1); }
+  }
+
+  /* Galeride görsel değişince yeni görselin kısa belirişi (azaltılmış harekette base katmanı süreyi sıfırlar). */
+  --animate-gallery-in: gallery-in 180ms var(--ease-out-strong);
+  @keyframes gallery-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
 }
 
 /* Kaydırma çubuğu gizli yatay şeritler (kategori menüsü); içerik klavye ve dokunmatikle yine kaydırılır. */
@@ -60,6 +75,11 @@
     scroll-padding-top: 1rem;
     /* Mobilde sabit alt gezinti (4.5rem + güvenli alan) odaklanan ya da kaydırılan öğeyi örtmesin. */
     scroll-padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Ürün sayfasındaki mobil sabit sepete ekle çubuğu (alt gezintinin üstünde, ~4.5rem) odaklanan öğeyi de örtmesin. */
+  html:has([data-sticky-bar]) {
+    scroll-padding-bottom: calc(10rem + env(safe-area-inset-bottom, 0px));
   }
 
   body {

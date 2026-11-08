@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { OrderDetailView } from "@/components/OrderDetailView";
+import { OrderDetailView } from "@/features/orders/components/OrderDetailView";
 export const metadata: Metadata = { title: "Sipariş", robots: { index: false } };
 type Props = { params: Promise<{ id: string }> };
 // Yalnız rota kimliği (kişisel veri değil) sunucudan geçer; sipariş içeriği ve sorgu parametreleri okunmaz, sipariş tarayıcıda alınır.

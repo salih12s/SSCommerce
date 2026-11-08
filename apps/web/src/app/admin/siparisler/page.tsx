@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { OrdersAdminList } from "@/components/admin/OrdersAdmin";
+import { OrdersAdminList } from "@/features/admin/components/OrdersAdmin";
 
 export const metadata: Metadata = { title: "Siparişler" };
 export default function AdminOrdersPage() {

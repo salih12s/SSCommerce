@@ -182,14 +182,18 @@ test.describe("içerik dürüstlüğü (1440px)", () => {
     expect(await page.locator("body").innerText()).not.toMatch(/SSCommerse/);
   });
 
-  test("favori düğmeleri pasif ve 'yakında'; kartta sepete ekle yok, seçenek bağlantısı ürün sayfasına gider", async ({ page }) => {
+  test("favori düğmeleri gerçek (aria-pressed); misafir basınca girişe gider; kartta sepete ekle yok, seçenek bağlantısı ürün sayfasına gider", async ({ page }) => {
     const cards = page.locator("article:has(h3)");
     await expect(cards).toHaveCount(products.length);
-    const favButtons = page.getByRole("button", { name: /favorilere ekle, yakında/i });
+    const favButtons = page.getByRole("button", { name: /favorilerde$/i });
     await expect(favButtons).toHaveCount(products.length);
-    for (const button of await favButtons.all()) await expect(button).toHaveAttribute("aria-disabled", "true");
-    await favButtons.first().click({ force: true });
-    await expect(page).toHaveURL(/\/$/);
+    for (const button of await favButtons.all()) {
+      await expect(button).toHaveAttribute("aria-pressed", "false");
+      await expect(button).not.toHaveAttribute("aria-disabled", "true");
+    }
+    await favButtons.first().click();
+    await expect(page).toHaveURL(/\/giris\?next=%2F$/);
+    await page.goBack();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     // Varyant seçimi ürün sayfasındadır: karttaki sepet düğmesi kalktı; yerine ürün sayfası bağlantısı geldi (sepete eklemez).
     await expect(page.getByRole("button", { name: /sepete ekle/i })).toHaveCount(0);
@@ -320,23 +324,21 @@ test.describe("mobil menü 390px", () => {
 test.describe("mobil alt gezinti 390px", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("görünür; Ana sayfa, Kategoriler, Sepetim ve Hesabım bağlantı; yalnız Favoriler pasif ve 'Yakında'", async ({ page }) => {
+  test("görünür; Ana sayfa, Kategoriler, Favoriler, Sepetim ve Hesabım gerçek bağlantı; anonim kullanıcıya sayaç yok", async ({ page }) => {
     await gotoHome(page);
     const nav = page.getByRole("navigation", { name: "Alt gezinti" });
     await expect(nav).toBeVisible();
     await expect(nav.getByRole("link", { name: "Ana sayfa" })).toHaveAttribute("href", "/");
     await expect(nav.getByRole("link", { name: "Kategoriler" })).toHaveAttribute("href", "/#kategoriler");
-    expect(await nav.getByRole("link").count()).toBe(4);
+    expect(await nav.getByRole("link").count()).toBe(5);
     await expect(nav.getByRole("link", { name: /Hesabım/ })).toHaveAttribute("href", "/hesabim");
     // Sepetim gerçek bağlantı: /sepet'e gider, anonim kullanıcıya sayaç göstermez.
     await expect(nav.getByRole("link", { name: /Sepetim/ })).toHaveAttribute("href", "/sepet");
     await expect(nav.getByRole("button", { name: /Sepetim/ })).toHaveCount(0);
     await expect(nav.getByTestId("cart-count")).toHaveCount(0);
-    const favorites = nav.getByRole("button", { name: /Favoriler/ });
-    await expect(favorites).toHaveCount(1);
-    await expect(favorites).toHaveAttribute("aria-disabled", "true");
-    await expect(favorites).toContainText("Yakında");
-    await expect(nav.getByRole("link", { name: /Favoriler/ })).toHaveCount(0);
+    await expect(nav.getByRole("link", { name: /Favoriler/ })).toHaveAttribute("href", "/favorilerim");
+    await expect(nav.getByRole("button", { name: /Favoriler/ })).toHaveCount(0);
+    await expect(nav.getByTestId("favorites-count")).toHaveCount(0);
     await nav.getByRole("link", { name: /Sepetim/ }).click();
     await expect(page).toHaveURL(/\/sepet$/);
   });
@@ -526,21 +528,19 @@ test.describe("klavye ve odak", () => {
   });
 });
 
-test.describe("header: hesap bağlantısı, favori ve sepet pasif, alt gezinti gizli (1440px)", () => {
+test.describe("header: hesap, favori ve sepet gerçek bağlantı, alt gezinti gizli (1440px)", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("hesabım ve sepetim gerçek bağlantı; yalnız favorilerim aria-disabled ve 'Yakında' yazıyor", async ({ page }) => {
+  test("hesabım, favorilerim ve sepetim gerçek bağlantı; anonim kullanıcıya sayaç yok", async ({ page }) => {
     await gotoHome(page);
     const header = page.locator("header");
     await expect(header.getByRole("link", { name: /Hesabım/ })).toHaveAttribute("href", "/hesabim");
     await expect(header.getByRole("link", { name: /Sepetim/ })).toHaveAttribute("href", "/sepet");
     await expect(header.getByRole("button", { name: /Sepetim/ })).toHaveCount(0);
     await expect(header.getByTestId("cart-count")).toHaveCount(0);
-    const favorites = header.getByRole("button", { name: /Favorilerim/ });
-    await expect(favorites).toHaveCount(1);
-    await expect(favorites).toHaveAttribute("aria-disabled", "true");
-    await expect(favorites).toContainText("Yakında");
-    await expect(header.getByRole("link", { name: /Favorilerim/ })).toHaveCount(0);
+    await expect(header.getByRole("link", { name: /Favorilerim/ })).toHaveAttribute("href", "/favorilerim");
+    await expect(header.getByRole("button", { name: /Favorilerim/ })).toHaveCount(0);
+    await expect(header.getByTestId("favorites-count")).toHaveCount(0);
     await header.getByRole("link", { name: /Sepetim/ }).click();
     await expect(page).toHaveURL(/\/sepet$/);
   });

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import type { AuditRow, Balance, Movement, Paged, Warehouse } from "../../src/lib/admin/types";
+import type { AuditRow, Balance, Movement, Paged, Warehouse } from "../../src/features/admin/types";
 import { actor, aGet, mkSellable, receiveApi, retire, settled, uid, warehouseId, WAREHOUSE_CODE, type Actor } from "./admin-support";
 import { api, orderSend, send } from "./support";
 

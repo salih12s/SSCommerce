@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { Paged, ProductSummary } from "../../src/lib/admin/types";
+import type { Paged, ProductSummary } from "../../src/features/admin/types";
 import { actor, aGet, settled, type Actor } from "./admin-support";
 import { axeSerious, noHorizontalOverflow, viewports } from "./support";
 

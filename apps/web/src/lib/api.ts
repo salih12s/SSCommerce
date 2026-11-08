@@ -13,6 +13,7 @@ const messages: Record<string, string> = {
   cart_quantity_limit: "Bir satırda en çok 20 adet olabilir.",
   cart_line_limit: "Sepette en çok 50 farklı ürün olabilir.",
   cart_total_too_large: "Sepet toplamı izin verilen üst sınırı aşıyor.",
+  favorite_limit: "En çok 100 ürünü favorilere ekleyebilirsin. Yeni eklemek için önce birini çıkar.",
   cart_item_not_found: "Bu satır sepetinde artık yok.",
   cart_empty: "Sepetin boş.",
   address_not_found: "Bu adres bulunamadı.",

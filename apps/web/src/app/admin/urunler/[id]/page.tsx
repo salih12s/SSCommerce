@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { ProductEditor } from "@/components/admin/ProductEditor";
+import { ProductEditor } from "@/features/admin/components/ProductEditor";
 
 export const metadata: Metadata = { title: "Ürün" };
 type Props = { params: Promise<{ id: string }> };

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { StockAdmin } from "@/components/admin/StockAdmin";
+import { StockAdmin } from "@/features/admin/components/StockAdmin";
 
 export const metadata: Metadata = { title: "Stok" };
 export default function AdminStockPage() {

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { formatPriceMinor } from "../../src/lib/format";
-import type { AuditRow, Category, ImageAsset, Paged, ProductDetail, ProductSummary } from "../../src/lib/admin/types";
+import type { AuditRow, Category, ImageAsset, Paged, ProductDetail, ProductSummary } from "../../src/features/admin/types";
 import { actor, aGet, aProblem, aWrite, mkCategory, mkProduct, mkSellable, mkSku, mkVariant, receiveApi, retire, settled, uid, warehouseId, type Actor } from "./admin-support";
 import { api, cartApi, goodAddress, send, orderSend } from "./support";
 

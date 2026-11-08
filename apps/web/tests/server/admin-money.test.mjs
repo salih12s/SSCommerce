@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { minorToTlInput, parseTlToMinor } from "../../src/lib/admin/money.ts";
+import { minorToTlInput, parseTlToMinor } from "../../src/features/admin/money.ts";
 
 test("TL input converts to integer kuruş without floating point", () => {
   const ok = { "1299": 129900, "1299,5": 129950, "1299,50": 129950, "1.299,50": 129950, "1,299.50": 129950, "1299.50": 129950, "1.299": 129900, "1.299.000": 129900000, "0,01": 1, "0.1": 10, " 12 ": 1200, "19,99": 1999, "9007199254740991": null };

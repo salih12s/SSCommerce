@@ -1,6 +1,6 @@
 import { expect, type APIRequestContext, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import type { AdminOrder, AdminVariant, Category, Dashboard, Paged, ProductDetail } from "../../src/lib/admin/types";
+import type { AdminOrder, AdminVariant, Category, Dashboard, Paged, ProductDetail } from "../../src/features/admin/types";
 import { FIXTURE_URL, api, goodAddress, orderSend, password, placeOrderApi, registerApi, send, type ApiOrder } from "./support";
 
 // Faz 8 yönetim E2E yardımcıları. Roller yalnız test-only yoldan verilir: kayıt API'si + E2eHost'un loopback `/fixture/role` ucu. Sabit/kalıcı admin ve sabit parola yoktur.
