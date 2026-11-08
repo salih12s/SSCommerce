@@ -8,6 +8,7 @@ using SSCommerce.Application.Administration;
 using SSCommerce.Application.Carts;
 using SSCommerce.Application.Catalog;
 using SSCommerce.Application.Checkout;
+using SSCommerce.Application.Favorites;
 using SSCommerce.Application.Inventory;
 using SSCommerce.Application.Orders;
 using SSCommerce.Infrastructure.Addresses;
@@ -15,6 +16,7 @@ using SSCommerce.Infrastructure.Administration;
 using SSCommerce.Infrastructure.Carts;
 using SSCommerce.Infrastructure.Catalog;
 using SSCommerce.Infrastructure.Checkout;
+using SSCommerce.Infrastructure.Favorites;
 using SSCommerce.Infrastructure.Health;
 using SSCommerce.Infrastructure.Identity;
 using SSCommerce.Infrastructure.Inventory;
@@ -65,6 +67,9 @@ public static class DependencyInjection
         services.AddScoped<ICartService, CartService>();
         services.AddScoped<IAddressService, AddressService>();
         services.AddScoped<ICheckoutPreviewService, CheckoutPreviewService>();
+
+        // Favoriler (MD-1): ekleme kullanıcı başına sıraya sokulur, okuma salt okunurdur.
+        services.AddScoped<IFavoriteService, FavoriteService>();
 
         // Siparişler (F7). Hepsi istek başına: verme ve durum geçişi kendi transaction'ını yönetir, sorgular salt okunurdur.
         services.AddScoped<OrderReader>();

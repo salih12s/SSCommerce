@@ -61,12 +61,13 @@ public class IdentityMigrationTests
         await using (var context = database.CreateDbContext())
         {
             var pending = (await context.Database.GetPendingMigrationsAsync(ct)).ToArray();
-            Assert.Equal(5, pending.Length); // AddIdentity, ardından Faz 5'in AddInventory'si, Faz 6'nın AddCartAndAddresses'i, Faz 7'nin AddOrdering'i ve Faz 8'in AddAdminOperations'ı
+            Assert.Equal(6, pending.Length); // AddIdentity, ardından Faz 5'in AddInventory'si, Faz 6'nın AddCartAndAddresses'i, Faz 7'nin AddOrdering'i, Faz 8'in AddAdminOperations'ı ve MD-1'in AddCustomerFavorites'ı
             Assert.EndsWith("_AddIdentity", pending[0]);
             Assert.EndsWith("_AddInventory", pending[1]);
             Assert.EndsWith("_AddCartAndAddresses", pending[2]);
             Assert.EndsWith("_AddOrdering", pending[3]);
             Assert.EndsWith("_AddAdminOperations", pending[4]);
+            Assert.EndsWith("_AddCustomerFavorites", pending[5]);
             await context.Database.MigrateAsync(ct);
         }
 
@@ -82,13 +83,14 @@ public class IdentityMigrationTests
             "SELECT string_agg(\"MigrationId\", ',' ORDER BY \"MigrationId\") FROM \"__EFMigrationsHistory\"", ct);
         Assert.NotNull(history);
         var ids = history.Split(',');
-        Assert.Equal(6, ids.Length);
+        Assert.Equal(7, ids.Length);
         Assert.EndsWith("_InitialCatalog", ids[0]);
         Assert.EndsWith("_AddIdentity", ids[1]);
         Assert.EndsWith("_AddInventory", ids[2]);
         Assert.EndsWith("_AddCartAndAddresses", ids[3]);
         Assert.EndsWith("_AddOrdering", ids[4]);
         Assert.EndsWith("_AddAdminOperations", ids[5]);
+        Assert.EndsWith("_AddCustomerFavorites", ids[6]);
     }
 
     [Fact]
@@ -155,7 +157,7 @@ public class IdentityMigrationTests
         Assert.Equal(before, await CatalogCountsAsync(database));
         Assert.Equal(IdentityTables.Length, await TableCountAsync(database, IdentityTables));
         Assert.Equal(3, await database.ScalarAsync<long>("SELECT count(*) FROM \"AspNetRoles\"", ct));
-        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
+        Assert.Equal(7, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
     }
 
     [Fact]

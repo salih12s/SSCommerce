@@ -47,13 +47,14 @@ public partial class AdminOperationsMigrationTests
     /// <summary>
     /// ÖNCEKİ şemadaki her tablonun (geçmiş tablosu hariç) sütun listesi ve satır md5'i. Sütun listesi göç ÖNCESİ alınır; göç sonrası aynı
     /// sütunlarla yeniden hesaplanır, böylece yeni <c>version</c> sütunu parmak izini bozmaz ama eski verinin tek bir baytı değişse yakalanır.
+    /// MD-1'in <c>customer_favorites</c> tablosu bu adımın KAPSAMI DIŞINDADIR (Admin geri alınırken o da kalkar); kendi testleri FavoritesMigrationTests'tedir.
     /// </summary>
     private static async Task<Dictionary<string, (string Columns, string Md5, long Rows)>> SnapshotAsync(PostgresTestDatabase database)
     {
         var tables = new List<string>();
         await using (var connection = await database.OpenConnectionAsync(Ct))
         await using (var command = new NpgsqlCommand(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name <> '__EFMigrationsHistory' ORDER BY table_name COLLATE \"C\"",
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name NOT IN ('__EFMigrationsHistory', 'customer_favorites') ORDER BY table_name COLLATE \"C\"",
             connection))
         await using (var reader = await command.ExecuteReaderAsync(Ct))
         {
@@ -125,9 +126,10 @@ public partial class AdminOperationsMigrationTests
 
         await MigrateToAsync(database, targetMigration: null);
 
-        Assert.Equal(6, await HistoryCountAsync(database));
+        Assert.Equal(7, await HistoryCountAsync(database));
+        // Admin adımı Faz 8'in sonuncusudur; ondan sonra yalnız MD-1'in ekleyici favoriler tablosu gelir.
         Assert.EndsWith("_AddAdminOperations", (await database.ScalarAsync<string>(
-            "SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" ORDER BY \"MigrationId\" DESC LIMIT 1", Ct))!);
+            "SELECT \"MigrationId\" FROM \"__EFMigrationsHistory\" ORDER BY \"MigrationId\" DESC LIMIT 1 OFFSET 1", Ct))!);
         Assert.True(await TableExistsAsync(database, "admin_audit_log"));
         Assert.Equal(0, await database.ScalarAsync<long>("SELECT count(*) FROM admin_audit_log", Ct));
         Assert.Equal(4, await FunctionCountAsync(database));
@@ -157,8 +159,10 @@ public partial class AdminOperationsMigrationTests
 
         await using (var context = database.CreateDbContext())
         {
-            var only = Assert.Single(await context.Database.GetPendingMigrationsAsync(Ct));
-            Assert.EndsWith("_AddAdminOperations", only);
+            var pending = (await context.Database.GetPendingMigrationsAsync(Ct)).ToArray();
+            Assert.Equal(2, pending.Length); // AddAdminOperations, ardından MD-1'in AddCustomerFavorites'ı
+            Assert.EndsWith("_AddAdminOperations", pending[0]);
+            Assert.EndsWith("_AddCustomerFavorites", pending[1]);
         }
 
         await MigrateToAsync(database, targetMigration: null);
@@ -192,7 +196,7 @@ public partial class AdminOperationsMigrationTests
             await context.Database.MigrateAsync(Ct);
         }
 
-        Assert.Equal(6, await HistoryCountAsync(database));
+        Assert.Equal(7, await HistoryCountAsync(database));
         Assert.Equal(4, await FunctionCountAsync(database));
         await AssertSnapshotUnchangedAsync(database, before);
     }
@@ -223,7 +227,7 @@ public partial class AdminOperationsMigrationTests
 
         await MigrateToAsync(database, targetMigration: null);
 
-        Assert.Equal(6, await HistoryCountAsync(database));
+        Assert.Equal(7, await HistoryCountAsync(database));
         Assert.Equal(4, await FunctionCountAsync(database));
         Assert.Equal(5, await TriggerCountAsync(database, "orders"));
         await AssertSnapshotUnchangedAsync(database, before);
@@ -256,6 +260,7 @@ public partial class AdminOperationsMigrationTests
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => MigrateToAsync(database, PreviousMigration));
 
         Assert.Contains("admin_audit_log has rows", (exception.InnerException ?? exception).Message, StringComparison.Ordinal);
+        // 7 uygulanmıştı: önce MD-1'in favoriler adımı geri alındı (kendi transaction'ı, başarılı), sonra Admin adımı reddedildi -> 6 kalır.
         Assert.Equal(6, await HistoryCountAsync(database));
         Assert.Equal(1, await database.ScalarAsync<long>("SELECT count(*) FROM admin_audit_log", Ct));
         Assert.Equal(4, await FunctionCountAsync(database)); // hiçbir nesne düşmedi (tek transaction geri sarıldı)
@@ -282,7 +287,7 @@ public partial class AdminOperationsMigrationTests
         await database.ExecuteAsync(script, Ct);
         await database.ExecuteAsync(script, Ct);
 
-        Assert.Equal(6, await HistoryCountAsync(database));
+        Assert.Equal(7, await HistoryCountAsync(database));
         Assert.True(await TableExistsAsync(database, "admin_audit_log"));
         Assert.Equal(4, await FunctionCountAsync(database));
         Assert.Equal(5, await TriggerCountAsync(database, "orders"));

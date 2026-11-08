@@ -125,10 +125,11 @@ public partial class OrderingMigrationTests
         Assert.Equal(4, await TableCountAsync(database, OrderTables));
         var history = (await database.ScalarAsync<string>(
             "SELECT string_agg(\"MigrationId\", ',' ORDER BY \"MigrationId\") FROM \"__EFMigrationsHistory\"", Ct))!.Split(',');
-        Assert.Equal(6, history.Length);
+        Assert.Equal(7, history.Length);
         Assert.EndsWith("_AddCartAndAddresses", history[3]);
         Assert.EndsWith("_AddOrdering", history[4]);
         Assert.EndsWith("_AddAdminOperations", history[5]);
+        Assert.EndsWith("_AddCustomerFavorites", history[6]);
 
         foreach (var table in OrderTables)
         {
@@ -172,9 +173,10 @@ public partial class OrderingMigrationTests
         await using (var context = database.CreateDbContext())
         {
             var pending = (await context.Database.GetPendingMigrationsAsync(Ct)).ToArray();
-            Assert.Equal(2, pending.Length); // AddOrdering, ardından Faz 8'in AddAdminOperations'ı
+            Assert.Equal(3, pending.Length); // AddOrdering, ardından Faz 8'in AddAdminOperations'ı ve MD-1'in AddCustomerFavorites'ı
             Assert.EndsWith("_AddOrdering", pending[0]);
             Assert.EndsWith("_AddAdminOperations", pending[1]);
+            Assert.EndsWith("_AddCustomerFavorites", pending[2]);
         }
 
         await MigrateToAsync(database, targetMigration: null);
@@ -201,7 +203,7 @@ public partial class OrderingMigrationTests
             await context.Database.MigrateAsync(Ct);
         }
 
-        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", Ct));
+        Assert.Equal(7, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", Ct));
         Assert.Equal(4, await TableCountAsync(database, OrderTables));
         Assert.Equal(2, await OrderFunctionCountAsync(database));
         Assert.Equal(checksum, await ExistingDataChecksumAsync(database));
@@ -228,7 +230,7 @@ public partial class OrderingMigrationTests
         Assert.Equal(4, await TableCountAsync(database, OrderTables));
         Assert.Equal(2, await OrderFunctionCountAsync(database));
         Assert.Contains("order_cancellation", await OperationTypeCheckAsync(database));
-        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", Ct));
+        Assert.Equal(7, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", Ct));
         Assert.Equal(before, await ExistingDataChecksumAsync(database));
         // Yeniden uygulanan şema çalışıyor: ilk sipariş yine 100001'den başlar.
         var data = new OrderingTestData(database);
@@ -280,7 +282,7 @@ public partial class OrderingMigrationTests
         Assert.Equal(4, await TableCountAsync(database, OrderTables));
         Assert.Equal(2, await OrderFunctionCountAsync(database));
         Assert.Equal(5, await TriggerCountAsync(database, "orders"));
-        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", Ct));
+        Assert.Equal(7, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", Ct));
         Assert.Equal(before, await ExistingDataChecksumAsync(database));
     }
 

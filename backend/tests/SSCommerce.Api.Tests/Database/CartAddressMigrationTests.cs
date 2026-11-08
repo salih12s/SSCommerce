@@ -98,11 +98,12 @@ public class CartAddressMigrationTests
         Assert.Equal(3, await TableCountAsync(database, CartAddressTables));
         var history = (await database.ScalarAsync<string>(
             "SELECT string_agg(\"MigrationId\", ',' ORDER BY \"MigrationId\") FROM \"__EFMigrationsHistory\"", ct))!.Split(',');
-        Assert.Equal(6, history.Length);
+        Assert.Equal(7, history.Length);
         Assert.EndsWith("_AddInventory", history[2]);
         Assert.EndsWith("_AddCartAndAddresses", history[3]);
         Assert.EndsWith("_AddOrdering", history[4]);
         Assert.EndsWith("_AddAdminOperations", history[5]);
+        Assert.EndsWith("_AddCustomerFavorites", history[6]);
         foreach (var table in CartAddressTables)
         {
             Assert.Equal(0, await database.ScalarAsync<long>($"SELECT count(*) FROM {table}", ct));
@@ -126,7 +127,7 @@ public class CartAddressMigrationTests
         await using (var context = database.CreateDbContext())
         {
             var pending = (await context.Database.GetPendingMigrationsAsync(ct)).ToArray();
-            Assert.Equal(3, pending.Length); // AddCartAndAddresses, ardından Faz 7'nin AddOrdering'i ve Faz 8'in AddAdminOperations'ı
+            Assert.Equal(4, pending.Length); // AddCartAndAddresses, ardından Faz 7'nin AddOrdering'i, Faz 8'in AddAdminOperations'ı ve MD-1'in AddCustomerFavorites'ı
             Assert.EndsWith("_AddCartAndAddresses", pending[0]);
         }
 
@@ -151,7 +152,7 @@ public class CartAddressMigrationTests
             await context.Database.MigrateAsync(ct);
         }
 
-        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
+        Assert.Equal(7, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
         Assert.Equal(3, await TableCountAsync(database, CartAddressTables));
     }
 
@@ -174,7 +175,7 @@ public class CartAddressMigrationTests
         await MigrateToAsync(database, targetMigration: null);
 
         Assert.Equal(3, await TableCountAsync(database, CartAddressTables));
-        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
+        Assert.Equal(7, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
         Assert.Equal(before, await ExistingDataChecksumAsync(database));
     }
 
@@ -197,7 +198,7 @@ public class CartAddressMigrationTests
         await database.ExecuteAsync(script, ct);
 
         Assert.Equal(3, await TableCountAsync(database, CartAddressTables));
-        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
+        Assert.Equal(7, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
         Assert.Equal(before, await ExistingDataChecksumAsync(database));
     }
 

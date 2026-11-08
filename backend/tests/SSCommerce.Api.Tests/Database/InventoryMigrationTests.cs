@@ -79,13 +79,14 @@ public class InventoryMigrationTests
         Assert.Equal(3, await TableCountAsync(database, InventoryTables));
         var history = (await database.ScalarAsync<string>(
             "SELECT string_agg(\"MigrationId\", ',' ORDER BY \"MigrationId\") FROM \"__EFMigrationsHistory\"", ct))!.Split(',');
-        Assert.Equal(6, history.Length);
+        Assert.Equal(7, history.Length);
         Assert.EndsWith("_InitialCatalog", history[0]);
         Assert.EndsWith("_AddIdentity", history[1]);
         Assert.EndsWith("_AddInventory", history[2]);
         Assert.EndsWith("_AddCartAndAddresses", history[3]);
         Assert.EndsWith("_AddOrdering", history[4]);
         Assert.EndsWith("_AddAdminOperations", history[5]);
+        Assert.EndsWith("_AddCustomerFavorites", history[6]);
 
         Assert.Equal(2, await InventoryTriggerCountAsync(database));
         Assert.Equal(1, await FunctionCountAsync(database));
@@ -115,7 +116,7 @@ public class InventoryMigrationTests
         await using (var context = database.CreateDbContext())
         {
             var pending = (await context.Database.GetPendingMigrationsAsync(ct)).ToArray();
-            Assert.Equal(4, pending.Length); // AddInventory, ardından Faz 6'nın AddCartAndAddresses'i, Faz 7'nin AddOrdering'i ve Faz 8'in AddAdminOperations'ı
+            Assert.Equal(5, pending.Length); // AddInventory, ardından Faz 6'nın AddCartAndAddresses'i, Faz 7'nin AddOrdering'i, Faz 8'in AddAdminOperations'ı ve MD-1'in AddCustomerFavorites'ı
             Assert.EndsWith("_AddInventory", pending[0]);
         }
 
@@ -140,7 +141,7 @@ public class InventoryMigrationTests
             await context.Database.MigrateAsync(ct);
         }
 
-        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
+        Assert.Equal(7, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
         Assert.Equal(3, await TableCountAsync(database, InventoryTables));
         Assert.Equal(2, await InventoryTriggerCountAsync(database));
         Assert.Equal(checksum, await ExistingDataChecksumAsync(database));
@@ -168,7 +169,7 @@ public class InventoryMigrationTests
         Assert.Equal(3, await TableCountAsync(database, InventoryTables));
         Assert.Equal(2, await InventoryTriggerCountAsync(database));
         Assert.Equal(1, await FunctionCountAsync(database));
-        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
+        Assert.Equal(7, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
         Assert.Equal(before, await ExistingDataChecksumAsync(database));
     }
 
@@ -192,7 +193,7 @@ public class InventoryMigrationTests
 
         Assert.Equal(3, await TableCountAsync(database, InventoryTables));
         Assert.Equal(2, await InventoryTriggerCountAsync(database));
-        Assert.Equal(6, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
+        Assert.Equal(7, await database.ScalarAsync<long>("SELECT count(*) FROM \"__EFMigrationsHistory\"", ct));
         Assert.Equal(before, await ExistingDataChecksumAsync(database));
     }
 

@@ -104,7 +104,7 @@ public sealed class AssumeHttpsMiddleware(RequestDelegate next, IOptions<Securit
 }
 
 /// <summary>
-/// Kimlik/oturum ve kullanıcıya özel uçların (<c>/api/v1/auth</c>, <c>/admin</c>, <c>/cart</c>, <c>/addresses</c>, <c>/checkout</c>, <c>/orders</c>)
+/// Kimlik/oturum ve kullanıcıya özel uçların (<c>/api/v1/auth</c>, <c>/admin</c>, <c>/cart</c>, <c>/addresses</c>, <c>/favorites</c>, <c>/checkout</c>, <c>/orders</c>)
 /// yanıtları, 401/403/429 dahil, hiçbir önbellekte tutulmaz. Kişisel veri (sipariş teslimat adresi dahil) paylaşılan önbelleğe ya da
 /// başka kullanıcıya sızmasın. Personel sipariş uçları <c>/admin</c> önekinin altındadır.
 /// </summary>
@@ -116,6 +116,7 @@ public sealed class NoStoreMiddleware(RequestDelegate next)
         "/api/v1/admin",
         "/api/v1/cart",
         "/api/v1/addresses",
+        "/api/v1/favorites",
         "/api/v1/checkout",
         "/api/v1/orders",
     ];

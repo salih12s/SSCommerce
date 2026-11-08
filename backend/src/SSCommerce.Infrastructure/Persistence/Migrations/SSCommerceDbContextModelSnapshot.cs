@@ -706,6 +706,33 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SSCommerce.Domain.Customers.CustomerFavorite", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("created_at");
+
+                    b.HasKey("UserId", "ProductId")
+                        .HasName("pk_customer_favorites");
+
+                    b.HasIndex("ProductId")
+                        .HasDatabaseName("ix_customer_favorites_product_id");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_customer_favorites_user_id_created_at");
+
+                    b.ToTable("customer_favorites", (string)null);
+                });
+
             modelBuilder.Entity("SSCommerce.Domain.Inventory.InventoryBalance", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1492,6 +1519,23 @@ namespace SSCommerce.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_customer_addresses_user");
+                });
+
+            modelBuilder.Entity("SSCommerce.Domain.Customers.CustomerFavorite", b =>
+                {
+                    b.HasOne("SSCommerce.Domain.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_customer_favorites_product");
+
+                    b.HasOne("SSCommerce.Infrastructure.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_customer_favorites_user");
                 });
 
             modelBuilder.Entity("SSCommerce.Domain.Inventory.InventoryBalance", b =>

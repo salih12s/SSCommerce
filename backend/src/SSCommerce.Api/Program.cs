@@ -5,6 +5,7 @@ using SSCommerce.Api.Carts;
 using SSCommerce.Api.Catalog;
 using SSCommerce.Api.Checkout;
 using SSCommerce.Api.Errors;
+using SSCommerce.Api.Favorites;
 using SSCommerce.Api.Health;
 using SSCommerce.Api.Observability;
 using SSCommerce.Api.OpenApi;
@@ -72,6 +73,7 @@ api.MapAuthEndpoints();
 api.MapAdminEndpoints();
 api.MapCartEndpoints();
 api.MapAddressEndpoints();
+api.MapFavoriteEndpoints();
 api.MapCheckoutEndpoints();
 api.MapOrderEndpoints();
 

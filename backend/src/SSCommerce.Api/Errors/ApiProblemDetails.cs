@@ -40,6 +40,9 @@ public static class ApiErrorCodes
     public const string AddressNotFound = "address_not_found";
     public const string AddressLimit = "address_limit";
 
+    // MD-1 (favoriler, docs/PLAN_CUSTOMER_EXPERIENCE.md).
+    public const string FavoriteLimit = "favorite_limit";
+
     // Faz 7 (siparişler, docs/CONTRACT_PHASE_7.md).
     public const string OrderNotFound = "order_not_found";
     public const string OrderItemInactive = "order_item_inactive";

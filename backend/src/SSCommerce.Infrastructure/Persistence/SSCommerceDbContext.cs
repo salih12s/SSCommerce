@@ -40,6 +40,8 @@ public sealed class SSCommerceDbContext(DbContextOptions<SSCommerceDbContext> op
 
     public DbSet<CustomerAddress> CustomerAddresses => Set<CustomerAddress>();
 
+    public DbSet<CustomerFavorite> CustomerFavorites => Set<CustomerFavorite>();
+
     public DbSet<Order> Orders => Set<Order>();
 
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
