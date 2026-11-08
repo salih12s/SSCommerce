@@ -14,14 +14,22 @@ using SSCommerce.Api.Security;
 using SSCommerce.Infrastructure;
 using SSCommerce.Infrastructure.Administration;
 using SSCommerce.Infrastructure.Persistence.Seed;
+using SSCommerce.Infrastructure.Showcase;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Seed ve ilk-Admin komutlarında EF SQL günlüğü gürültüsü olmasın (ve komut girdisi/sonucu günlüğe karışmasın).
-if (args.Contains(DemoCatalogSeedCommand.Flag) || args.Contains(BootstrapAdminCommand.Flag))
+if (args.Contains(DemoCatalogSeedCommand.Flag) || args.Contains(BootstrapAdminCommand.Flag) || args.Contains(ShowcaseSeedCommand.Flag))
 {
     // Taze veritabanında "__EFMigrationsHistory yok" sorgu hatası da beklenen durumdur (bekleyen migration denetimi).
     builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.None);
+}
+
+// Vitrin komutu (VT-2): tarihleri geçmişe yayabilmek için komut çalışırken saat ShowcaseClock'tur (varsayılanı gerçek saat). AddInfrastructure'ın
+// TryAddSingleton(TimeProvider.System) kaydı bunu ezmez; sunucu modunda bu kayıt hiç yapılmaz.
+if (args.Contains(ShowcaseSeedCommand.Flag))
+{
+    builder.Services.AddSingleton<TimeProvider, ShowcaseClock>();
 }
 
 // RFC 9457 hata modeli: her ProblemDetails'e `code` ve `traceId` eklenir (bkz. ApiProblemDetails).
@@ -87,6 +95,12 @@ if (args.Contains(DemoCatalogSeedCommand.Flag))
 if (args.Contains(BootstrapAdminCommand.Flag))
 {
     return await BootstrapAdminCommand.RunAsync(app.Services, app.Environment, Console.In, Console.Out, Console.Error);
+}
+
+// Geliştirme komutu (VT-2, D-092): sabit vitrin hesapları ve örnek veri; sunucuyu başlatmaz. Yalnız Development + loopback veritabanı. HTTP ucu DEĞİLDİR.
+if (args.Contains(ShowcaseSeedCommand.Flag))
+{
+    return await ShowcaseSeedCommand.RunAsync(app.Services, app.Environment, Console.Out, Console.Error);
 }
 
 app.Run();

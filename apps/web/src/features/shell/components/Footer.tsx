@@ -1,7 +1,6 @@
 import Link from "next/link";
+import { legalLinks } from "@/content/legal";
 import { getCategories } from "@/features/catalog/catalog";
-
-const corporate = ["Hakkımızda", "İletişim", "Gizlilik ve KVKK", "Mesafeli satış sözleşmesi"];
 
 export async function Footer() {
   const result = await getCategories();
@@ -37,16 +36,18 @@ export async function Footer() {
             </li>
           </ul>
         </nav>
-        <div>
+        <nav aria-label="Kurumsal">
           <p className="font-display text-lg font-bold">Kurumsal</p>
-          <ul className="mt-3 space-y-1 text-on-ink-muted">
-            {corporate.map((label) => (
-              <li key={label} className="py-1.5">
-                {label} <span className="ml-1 rounded-sm border border-white/25 px-1.5 py-px text-xs">Yakında</span>
+          <ul className="mt-3 text-on-ink-muted">
+            {legalLinks.map((l) => (
+              <li key={l.href}>
+                <Link href={l.href} className="inline-block py-1.5 hover:text-accent">
+                  {l.label}
+                </Link>
               </li>
             ))}
           </ul>
-        </div>
+        </nav>
       </div>
       <p className="border-t border-white/10 px-4 py-4 text-center text-sm text-on-ink-muted">
         © SSCommerce demo. Gerçek ürün, kampanya ya da ödeme içermez.

@@ -3,9 +3,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Options;
 using SSCommerce.Api.Errors;
 using SSCommerce.Api.Http;
 using SSCommerce.Api.Security;
+using SSCommerce.Application.Showcase;
 using SSCommerce.Infrastructure.Identity;
 
 namespace SSCommerce.Api.Auth;
@@ -15,6 +17,12 @@ public sealed record CredentialsRequest(string? Email, string? Password);
 
 /// <summary>Parola değiştirme gövdesi (MD-2). Başka alanlar yok sayılır.</summary>
 public sealed record ChangePasswordRequest(string? CurrentPassword, string? NewPassword);
+
+/// <summary>Demo giriş gövdesi (VT-2): yalnız hesap ANAHTARI (<c>customer</c>, <c>admin</c> ya da <c>warehouse</c>). E-posta, kimlik ya da parola alanı yoktur; fazlası yok sayılır.</summary>
+public sealed record DemoSignInRequest(string? Account);
+
+/// <summary><c>GET /auth/demo</c> yanıtı: kullanılabilir vitrin hesabı anahtarları.</summary>
+public sealed record DemoAccountsDto(IReadOnlyList<string> Accounts);
 
 public sealed record CapabilitiesDto(bool Admin, bool Warehouse);
 
@@ -104,6 +112,28 @@ public static class AuthEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status429TooManyRequests);
+
+        // Vitrin (VT-2, D-092): Showcase:Enabled AÇILIŞTA okunur; kapalıyken uçlar HİÇ kaydedilmez, yani yönlendirme düzeyinde 404'tür (ne uç ne OpenAPI
+        // girdisi vardır: varlığı sızmaz). Production/Staging'de bayrak açılamaz (ProductionConfigurationValidator).
+        if (api.ServiceProvider.GetRequiredService<IOptions<ShowcaseOptions>>().Value.Enabled)
+        {
+            auth.MapGet("/demo", GetDemoAccounts)
+                .WithName("GetDemoAccounts")
+                .WithSummary("Vitrin modunda kullanılabilir demo hesap anahtarları: customer, admin, warehouse. Vitrin kapalıyken uç yoktur (404).")
+                .RequireRateLimiting(RateLimitPolicies.General)
+                .Produces<DemoAccountsDto>(StatusCodes.Status200OK);
+
+            auth.MapPost("/demo", DemoSignIn)
+                .WithName("DemoSignIn")
+                .WithSummary("Vitrin modu: gövdedeki anahtarla (customer|admin|warehouse) SABİT vitrin hesabına parolasız cookie oturumu açar. Başka kullanıcı hedeflenemez.")
+                .WithDescription("Hatalar: 400 validation_failed (account); 409 showcase_not_seeded (hesap yok ya da beklenen rolde değil), showcase_account_locked; 429 rate_limited. Vitrin kapalıyken uç yoktur (404).")
+                .Accepts<DemoSignInRequest>("application/json")
+                .RequireRateLimiting(RateLimitPolicies.Credentials)
+                .Produces<AccountDto>(StatusCodes.Status200OK)
+                .ProducesValidationProblem()
+                .ProducesProblem(StatusCodes.Status409Conflict)
+                .ProducesProblem(StatusCodes.Status429TooManyRequests);
+        }
 
         auth.MapGet("/me", GetMe)
             .WithName("GetMe")
@@ -202,6 +232,60 @@ public static class AuthEndpoints
         logger.LogInformation("Giriş yapıldı: {UserId}", user.Id);
         return Results.Ok(await ToAccountAsync(users, user));
     }
+
+    private static IResult GetDemoAccounts() => Results.Ok(new DemoAccountsDto(ShowcaseAccounts.Keys));
+
+    /// <summary>
+    /// Parolasız giriş, YALNIZ üç sabit vitrin hesabı için. E-posta koddaki tablodan gelir (<see cref="ShowcaseAccounts"/>); istek yalnız anahtarı seçer,
+    /// bilinmeyen anahtar 400'dür. Hesap ayrıca beklenen role sahip olmalıdır (aynı e-postayı önceden kaydeden biri yetki kazanmaz). Oturum, login ile
+    /// AYNI yoldan açılır (<c>SignInAsync</c>, kalıcı değil, aynı cookie şeması): sunucu tarafı iptal, CSRF ve Origin kuralları aynıdır.
+    /// </summary>
+    private static async Task<IResult> DemoSignIn(
+        HttpContext http,
+        SignInManager<AppUser> signIn,
+        UserManager<AppUser> users,
+        ILogger<AuthLog> logger,
+        CancellationToken cancellationToken)
+    {
+        var (body, bodyError) = await JsonRequestBody.ReadAsync<DemoSignInRequest>(http.Request, MaxBodyBytes, cancellationToken);
+        if (body is null)
+        {
+            return ApiResults.ValidationFailed(bodyError!);
+        }
+
+        if (string.IsNullOrEmpty(body.Account))
+        {
+            return ApiResults.ValidationFailed(new Dictionary<string, string[]> { ["account"] = ["account zorunludur."] });
+        }
+
+        if (!ShowcaseAccounts.TryGetEmail(body.Account, out var email))
+        {
+            return ApiResults.ValidationFailed(new Dictionary<string, string[]>
+            {
+                ["account"] = [$"account şunlardan biri olmalıdır: {string.Join(", ", ShowcaseAccounts.Keys)}."],
+            });
+        }
+
+        var user = await users.FindByEmailAsync(email);
+        if (user is null || !await users.IsInRoleAsync(user, ShowcaseAccounts.RoleName(body.Account)))
+        {
+            return NotSeeded();
+        }
+
+        if (await users.IsLockedOutAsync(user))
+        {
+            return ApiResults.Problem(
+                StatusCodes.Status409Conflict, "Vitrin hesabı geçici olarak kilitli, lütfen daha sonra tekrar deneyin", ApiErrorCodes.ShowcaseAccountLocked);
+        }
+
+        await signIn.SignInAsync(user, isPersistent: false);
+        logger.LogInformation("Vitrin hesabıyla giriş yapıldı: {Account}", body.Account);
+        return Results.Ok(await ToAccountAsync(users, user));
+    }
+
+    private static IResult NotSeeded() =>
+        ApiResults.Problem(
+            StatusCodes.Status409Conflict, "Vitrin hesabı hazır değil; önce --seed-showcase komutu çalıştırılmalı", ApiErrorCodes.ShowcaseNotSeeded);
 
     private static async Task<IResult> Logout(
         HttpContext http,

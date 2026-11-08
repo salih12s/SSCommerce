@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using SSCommerce.Application.Showcase;
 using SSCommerce.Infrastructure;
 
 namespace SSCommerce.Api.Security;
@@ -12,6 +13,7 @@ namespace SSCommerce.Api.Security;
 /// Development dışında olduğundan <c>http://localhost</c> da KABUL EDİLMEZ.</item>
 /// <item><c>DataProtection:KeysPath</c> dolu (Development dışı ortamlarda eskiden yalnız uyarıydı).</item>
 /// <item><c>Ordering:Enabled</c> AÇIKÇA <c>true</c>/<c>false</c> (sipariş verme sahip iş-riski kararıdır; sessiz varsayılan yok).</item>
+/// <item><c>Showcase:Enabled</c> (VT-2, parolasız vitrin girişi) <c>true</c> OLAMAZ; yoksa ya da <c>false</c> ise geçer.</item>
 /// </list>
 /// Hata iletileri DEĞER içermez, yalnız yapılandırma anahtarı adı (bağlantı dizesi/origin loglara sızmaz). Development ve diğer ortam adları
 /// (Testing vb.) etkilenmez. Bu kayıt <c>IValidateOptions&lt;<see cref="ProductionStartupCheck"/>&gt;</c> olarak yapılır; testler gerektiğinde onu çıkarabilir.
@@ -62,6 +64,14 @@ public sealed class ProductionConfigurationValidator(IConfiguration configuratio
         if (!bool.TryParse(configuration["Ordering:Enabled"], out _))
         {
             failures.Add($"{environment.EnvironmentName}: Ordering:Enabled açıkça true ya da false olarak verilmelidir (herkese açık sipariş sahip kararıdır).");
+        }
+
+        // VT-2 (D-092): vitrin demo girişi parolasız oturum açar; herkese açık ortamda KAPALI kalmalıdır. Anahtar yoksa ya da açıkça false ise geçer;
+        // true ya da yorumlanamayan her değer açılışı durdurur (fail-closed: "yes" gibi bir değer yanlışlıkla açık sayılmasın diye).
+        var showcase = configuration[$"{ShowcaseOptions.SectionName}:Enabled"];
+        if (!string.IsNullOrWhiteSpace(showcase) && !(bool.TryParse(showcase, out var showcaseEnabled) && !showcaseEnabled))
+        {
+            failures.Add($"{environment.EnvironmentName}: {ShowcaseOptions.SectionName}:Enabled bu ortamda açılamaz (vitrin demo girişi yalnız Development içindir).");
         }
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);

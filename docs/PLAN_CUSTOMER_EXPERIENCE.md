@@ -72,3 +72,21 @@ Regression: bulunan her hata için önce onu yakalayan test.
 
 ## MD-4 Yasal sayfalar
 Metinler ürün sahibinden/hukukçudan gelir; uydurma yasal metin yayımlanmaz. Altyapı (rotalar, footer bağlantıları) içerik geldiğinde yapılır.
+
+## Vitrin paketi (VT) — 2026-11-08, kullanıcı kararları
+
+Proje canlıya alınmayacak bir portföy vitrini. Kararlar: logo **A · Etiket** (pano: https://claude.ai/artifact/FkSadgbdaERoukGLr1dsma), demo için **sabit vitrin verisi + demo giriş düğmeleri**, koyu tema **şimdilik yok**. Ziyaretçiye özel 24 saatlik demo hesabı (demo-account kalıbı) kullanılmaz: siparişler kullanıcıya RESTRICT, tahsisler değişmez stok hareketlerine bağlı; demo kullanıcı stok defteri bozulmadan silinemez (D-092).
+
+| Adım | Kapsam | Ajan |
+|---|---|---|
+| VT-1 | MD-4 örnek yasal/kurumsal sayfalar | frontend-dev |
+| VT-2 | Vitrin verisi + demo giriş ucu (`Showcase:Enabled`) | backend-dev |
+| VT-3 | Logo A (SVG bileşen, favicon/app icon), giriş sayfasında demo düğmeleri, `dev.ps1 -Showcase` | frontend-dev + ana ajan |
+| VT-4 | Vitrin README'si + GIF/ekran görüntüleri (SS Filo düzeni) | ana ajan (readme-media) |
+
+### VT-2 sözleşme
+- `Showcase:Enabled` (varsayılan `false`). `ProductionConfigurationValidator` Production'da `true`'yu reddeder; dağıtım dosyaları bunu hiç açmaz.
+- Komut `--seed-showcase` (yalnız Development, `--seed-demo-catalog` ile aynı koruma; idempotent): demo kataloğunu garanti eder; depo yoksa "Ana Depo"; her aktif varyanta stok girişi (envanter servisi üzerinden, hareketli); üç vitrin hesabı (sabit e-postalar `demo-musteri@sscommerce.example`, `demo-yonetici@sscommerce.example`, `demo-depo@sscommerce.example`; rastgele, hiçbir yerde saklanmayan parola; roller Customer/Admin/Warehouse); demo müşteriye 2 adres, ~6 favori, sepette 2 ürün ve GERÇEK sipariş servisinden geçen 5 sipariş (teslim edildi, kargoda, hazırlanıyor, alındı, iptal) — durumlar personel durum servisiyle ilerletilir; tarihler gerçekçi olsun diye geçmişe yayılabilir (yalnız zaman alanları; tutar/stok değişmezleri bozulmaz).
+- `GET /api/v1/auth/demo` → kapalıyken 404; açıkken 200 `{ "accounts": ["customer","admin","warehouse"] }`.
+- `POST /api/v1/auth/demo` `{ "account": "customer"|"admin"|"warehouse" }` → kapalıyken 404; açıkken ilgili SABİT vitrin hesabıyla normal giriş cookie'si (parolasız `SignInAsync`, yalnız bu üç e-posta), 200 `AccountDto`; hesap yoksa 409 `showcase_not_seeded`; CSRF + `auth-credentials` hız sınırı; başka kullanıcı hiçbir yolla hedeflenemez.
+- Bilinen sınır: vitrin hesapları ortaktır (canlı yok); demo yönetici kataloğu değiştirebilir — README "Bilinen sınırlar".

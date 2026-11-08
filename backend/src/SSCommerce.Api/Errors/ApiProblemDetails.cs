@@ -64,6 +64,13 @@ public static class ApiErrorCodes
     public const string RoleSelfDemotion = "role_self_demotion";
     public const string LastAdmin = "last_admin";
 
+    // VT-2 (vitrin, D-092).
+    /// <summary>Sabit vitrin hesabı yok (tohumlanmamış ya da silinmiş) ya da beklenen rolde değil: 409.</summary>
+    public const string ShowcaseNotSeeded = "showcase_not_seeded";
+
+    /// <summary>Sabit vitrin hesabı kilitli (parola denemeleriyle): 409. Kilit süresi dolunca demo giriş yine çalışır.</summary>
+    public const string ShowcaseAccountLocked = "showcase_account_locked";
+
     // Faz 9 (işletim).
     /// <summary>Sipariş verme anahtarı kapalı (<c>Ordering:Enabled=false</c>): 503, hiçbir şey yazılmadı.</summary>
     public const string OrderingDisabled = "ordering_disabled";

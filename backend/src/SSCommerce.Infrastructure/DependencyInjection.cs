@@ -11,6 +11,7 @@ using SSCommerce.Application.Checkout;
 using SSCommerce.Application.Favorites;
 using SSCommerce.Application.Inventory;
 using SSCommerce.Application.Orders;
+using SSCommerce.Application.Showcase;
 using SSCommerce.Infrastructure.Addresses;
 using SSCommerce.Infrastructure.Administration;
 using SSCommerce.Infrastructure.Carts;
@@ -83,6 +84,9 @@ public static class DependencyInjection
             .BindConfiguration(OrderLimitOptions.SectionName)
             .Validate(options => options.Validate() is null, "Ordering:MaxOpenOrdersPerUser ve Ordering:MaxOrdersPerRollingDay 1 ile 1000 arasında olmalıdır.")
             .ValidateOnStart();
+
+        // Vitrin (VT-2, D-092): yalnız Showcase:Enabled bayrağı. Kapalıyken demo giriş uçları hiç kaydedilmez; Production'da açık olması açılışı durdurur.
+        services.AddOptions<ShowcaseOptions>().BindConfiguration(ShowcaseOptions.SectionName);
 
         // Yönetim (Faz 8): katalog yazma/okuma, pano ve raporlar, personel rolleri. Hepsi istek başına.
         services.AddScoped<AdminCatalogQueries>();
