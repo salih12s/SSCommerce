@@ -19,6 +19,9 @@ public enum RoleChangeStatus
     /// <summary>Yapan kişi (taze SQL ile) artık Admin değil (403 forbidden).</summary>
     ActorNotAdmin,
 
+    /// <summary>Hedef üç sabit vitrin hesabından biri: rolleri değiştirilemez (409 showcase_account_protected).</summary>
+    ShowcaseProtected,
+
     /// <summary>Admin kendi Admin rolünü alamaz (409 role_self_demotion).</summary>
     SelfDemotion,
 

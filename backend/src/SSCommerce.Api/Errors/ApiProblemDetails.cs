@@ -68,6 +68,9 @@ public static class ApiErrorCodes
     /// <summary>Sabit vitrin hesabı yok (tohumlanmamış ya da silinmiş) ya da beklenen rolde değil: 409.</summary>
     public const string ShowcaseNotSeeded = "showcase_not_seeded";
 
+    /// <summary>Hedef sabit bir vitrin hesabı: rolü yönetim ucundan değiştirilemez (409).</summary>
+    public const string ShowcaseAccountProtected = "showcase_account_protected";
+
     /// <summary>Sabit vitrin hesabı kilitli (parola denemeleriyle): 409. Kilit süresi dolunca demo giriş yine çalışır.</summary>
     public const string ShowcaseAccountLocked = "showcase_account_locked";
 

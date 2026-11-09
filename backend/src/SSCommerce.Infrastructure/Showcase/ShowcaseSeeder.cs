@@ -149,6 +149,8 @@ internal sealed class ShowcaseSeeder(IServiceProvider services, TimeProvider tim
                 throw new ShowcaseSeedException("vitrin e-postalarından biri başka bir hesaba ait ve beklenen rolde değil; hiçbir yetki verilmedi.");
             }
 
+            // Eski sahibin (ör. aynı e-postayı kendi parolasıyla önceden kaydeden biri) parolası ve oturumları geçersiz kılınır; kilit kapatılır.
+            await HardenExistingAsync(users, scope.ServiceProvider.GetRequiredService<ISessionRevoker>(), existing, ct);
             return existing.Id;
         }
 
@@ -166,9 +168,41 @@ internal sealed class ShowcaseSeeder(IServiceProvider services, TimeProvider tim
             throw new ShowcaseSeedException($"vitrin hesabına rol verilemedi (hata kodları: {string.Join(',', roled.Errors.Select(e => e.Code))}).");
         }
 
+        // CreateAsync LockoutEnabled'ı varsayılan (true) yapar; vitrin hesapları kilitlenemez olmalı (aşağıya bkz.).
+        var unlocked = await users.SetLockoutEnabledAsync(user, false);
+        if (!unlocked.Succeeded)
+        {
+            throw new ShowcaseSeedException($"vitrin hesabının kilidi kapatılamadı (hata kodları: {string.Join(',', unlocked.Errors.Select(e => e.Code))}).");
+        }
+
         await transaction.CommitAsync(ct);
         _accounts++;
         return user.Id;
+    }
+
+    /// <summary>
+    /// Var olan vitrin hesabını her koşuda sertleştirir (idempotent; satır eklemez, bu yüzden <see cref="ShowcaseSeedResult.NewTotal"/> sayacına girmez):
+    /// <list type="bullet">
+    /// <item>Parola YENİ rastgele değerle değişir ve hiçbir yere yazılmaz: e-postayı önceden kendi parolasıyla kaydeden biri (squatting) artık giremez.</item>
+    /// <item>Security stamp yenilenir (<see cref="ISessionRevoker"/>): o kişinin açık oturumları düşer.</item>
+    /// <item><c>LockoutEnabled = false</c>, <c>LockoutEnd = null</c>, <c>AccessFailedCount = 0</c>: parolayı kimse bilmediği için parola girişi zaten başarısızdır; kilit açık
+    /// kalsaydı sabit e-postaya 5 yanlış parola göndermek demo girişi 15 dk kapatırdı (kilitleme DoS).</item>
+    /// </list>
+    /// Yan etki: tohum her koşulduğunda vitrin hesaplarının açık oturumları kapanır (yeniden "Demo ile dene" gerekir).
+    /// </summary>
+    private static async Task HardenExistingAsync(UserManager<AppUser> users, ISessionRevoker sessions, AppUser user, CancellationToken ct)
+    {
+        user.PasswordHash = users.PasswordHasher.HashPassword(user, NewPassword());
+        user.LockoutEnabled = false;
+        user.LockoutEnd = null;
+        user.AccessFailedCount = 0;
+        var updated = await users.UpdateAsync(user);
+        if (!updated.Succeeded)
+        {
+            throw new ShowcaseSeedException($"vitrin hesabı sertleştirilemedi (hata kodları: {string.Join(',', updated.Errors.Select(e => e.Code))}).");
+        }
+
+        await sessions.RevokeAsync(user.Id, ct);
     }
 
     /// <summary>Kimsenin bilmediği parola: 40 karakter, CSPRNG; politikayı (harf + rakam, >= 10) sağlayana kadar yeniden üretilir. Hiçbir yere yazılmaz.</summary>
@@ -245,6 +279,11 @@ internal sealed class ShowcaseSeeder(IServiceProvider services, TimeProvider tim
                     _receipts++;
                     break;
                 case StockOperationStatus.Replayed:
+                    break;
+                case StockOperationStatus.StockLimitExceeded:
+                    // "Stok garantisi": bu varyantın bakiyesi +StockPerVariant'ı kaldıramayacak kadar dolu (ör. başka bir süreç MaxOnHandQuantity'ye çıkardı), yani zaten
+                    // yeterli stok var. Atlanır; hareket ve idempotency anahtarı yazılmaz (servis reddi atomik yapar), sayaca girmez, her koşuda aynı sonuç. Girişten önce
+                    // bakiye okumak yerine servisin kendi atomik üst sınır kontrolüne güvenilir: okuyup yazma arasında yarış olmaz ve sınır kuralı tek yerde kalır.
                     break;
                 default:
                     throw new ShowcaseSeedException($"stok girişi reddedildi ({result.Status}).");

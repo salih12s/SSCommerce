@@ -13,7 +13,7 @@ namespace SSCommerce.Api.Security;
 /// Development dışında olduğundan <c>http://localhost</c> da KABUL EDİLMEZ.</item>
 /// <item><c>DataProtection:KeysPath</c> dolu (Development dışı ortamlarda eskiden yalnız uyarıydı).</item>
 /// <item><c>Ordering:Enabled</c> AÇIKÇA <c>true</c>/<c>false</c> (sipariş verme sahip iş-riski kararıdır; sessiz varsayılan yok).</item>
-/// <item><c>Showcase:Enabled</c> (VT-2, parolasız vitrin girişi) <c>true</c> OLAMAZ; yoksa ya da <c>false</c> ise geçer.</item>
+/// <item><c>Showcase:Enabled</c> (VT-2, parolasız vitrin girişi) Development DIŞINDAKİ HER ortam adında (Prod, UAT, Demo... dahil) <c>true</c> OLAMAZ; yoksa ya da <c>false</c> ise geçer.</item>
 /// </list>
 /// Hata iletileri DEĞER içermez, yalnız yapılandırma anahtarı adı (bağlantı dizesi/origin loglara sızmaz). Development ve diğer ortam adları
 /// (Testing vb.) etkilenmez. Bu kayıt <c>IValidateOptions&lt;<see cref="ProductionStartupCheck"/>&gt;</c> olarak yapılır; testler gerektiğinde onu çıkarabilir.
@@ -24,15 +24,36 @@ public sealed class ProductionConfigurationValidator(IConfiguration configuratio
 {
     public static bool AppliesTo(IHostEnvironment environment) => environment.IsProduction() || environment.IsStaging();
 
+    /// <summary>
+    /// Vitrin denetimi (VT-2, D-092) ortam ADINA bağlı DEĞİL, "Development mı?" sorusuna bağlıdır: Production/Staging dışındaki her ad (Prod, UAT, Demo, Preview, Testing...)
+    /// da herkese açık sayılır. Aksi halde <c>ASPNETCORE_ENVIRONMENT=Demo</c> + <c>Showcase__Enabled=true</c> parolasız Admin oturumu açardı.
+    /// </summary>
+    public static bool ShowcaseMustBeOff(IHostEnvironment environment) => !environment.IsDevelopment();
+
     public ValidateOptionsResult Validate(string? name, ProductionStartupCheck options)
     {
-        if (!AppliesTo(environment))
-        {
-            return ValidateOptionsResult.Success;
-        }
-
         var failures = new List<string>();
 
+        if (AppliesTo(environment))
+        {
+            AddPublicEnvironmentFailures(failures);
+        }
+
+        if (ShowcaseMustBeOff(environment))
+        {
+            // Yoksa geçer; "false" geçer. Boş, "true" ya da yorumlanamayan her değer ("yes", "1") açılışı durdurur (fail-closed: yanlışlıkla açık sayılmasın).
+            var showcase = configuration[$"{ShowcaseOptions.SectionName}:Enabled"];
+            if (showcase is not null && !(bool.TryParse(showcase, out var showcaseEnabled) && !showcaseEnabled))
+            {
+                failures.Add($"{environment.EnvironmentName}: {ShowcaseOptions.SectionName}:Enabled bu ortamda açılamaz (vitrin demo girişi yalnız Development içindir).");
+            }
+        }
+
+        return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
+    }
+
+    private void AddPublicEnvironmentFailures(List<string> failures)
+    {
         if (string.IsNullOrWhiteSpace(configuration.GetConnectionString(DependencyInjection.ConnectionStringName)))
         {
             failures.Add($"{environment.EnvironmentName}: ConnectionStrings:{DependencyInjection.ConnectionStringName} zorunludur.");
@@ -65,16 +86,6 @@ public sealed class ProductionConfigurationValidator(IConfiguration configuratio
         {
             failures.Add($"{environment.EnvironmentName}: Ordering:Enabled açıkça true ya da false olarak verilmelidir (herkese açık sipariş sahip kararıdır).");
         }
-
-        // VT-2 (D-092): vitrin demo girişi parolasız oturum açar; herkese açık ortamda KAPALI kalmalıdır. Anahtar yoksa ya da açıkça false ise geçer;
-        // true ya da yorumlanamayan her değer açılışı durdurur (fail-closed: "yes" gibi bir değer yanlışlıkla açık sayılmasın diye).
-        var showcase = configuration[$"{ShowcaseOptions.SectionName}:Enabled"];
-        if (!string.IsNullOrWhiteSpace(showcase) && !(bool.TryParse(showcase, out var showcaseEnabled) && !showcaseEnabled))
-        {
-            failures.Add($"{environment.EnvironmentName}: {ShowcaseOptions.SectionName}:Enabled bu ortamda açılamaz (vitrin demo girişi yalnız Development içindir).");
-        }
-
-        return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 
     /// <summary>Şema+host(+port) dışında hiçbir şey olmayan mutlak https adresi. Tarayıcının <c>Origin</c> başlığı da tam bu biçimdedir.</summary>

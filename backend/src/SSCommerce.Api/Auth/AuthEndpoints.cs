@@ -114,8 +114,11 @@ public static class AuthEndpoints
             .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
         // Vitrin (VT-2, D-092): Showcase:Enabled AÇILIŞTA okunur; kapalıyken uçlar HİÇ kaydedilmez, yani yönlendirme düzeyinde 404'tür (ne uç ne OpenAPI
-        // girdisi vardır: varlığı sızmaz). Production/Staging'de bayrak açılamaz (ProductionConfigurationValidator).
-        if (api.ServiceProvider.GetRequiredService<IOptions<ShowcaseOptions>>().Value.Enabled)
+        // girdisi vardır: varlığı sızmaz). Development dışındaki hiçbir ortamda bayrak açılamaz (ProductionConfigurationValidator) ve uç kaydedilmez.
+        // İkinci savunma katmanı: bayrak açık olsa bile YALNIZ Development'ta kaydedilir. Ortam adı "Prod/UAT/Demo" gibi bir şey olsa ve açılış denetimi
+        // (ProductionConfigurationValidator) atlansa bile parolasız oturum ucu oluşmaz. Ortam önce sorulur: Development dışında bayrak hiç okunmaz.
+        if (api.ServiceProvider.GetRequiredService<IHostEnvironment>().IsDevelopment()
+            && api.ServiceProvider.GetRequiredService<IOptions<ShowcaseOptions>>().Value.Enabled)
         {
             auth.MapGet("/demo", GetDemoAccounts)
                 .WithName("GetDemoAccounts")

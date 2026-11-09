@@ -33,12 +33,13 @@ public static class StaffEndpoints
             .WithTags("Admin Staff")
             .WithName("AdminGrantRole")
             .WithSummary("Admin ya da Warehouse rolü verir. Zaten varsa 200 changed:false (damga ve denetim yazılmaz). Hedefin oturumları kapanır.")
-            .WithDescription("Hatalar: 400 geçersiz rol; 403 yapan artık Admin değil; 404 user_not_found; 503 busy.")
+            .WithDescription("Hatalar: 400 geçersiz rol; 403 yapan artık Admin değil; 404 user_not_found; 409 showcase_account_protected (sabit vitrin hesabı); 503 busy.")
             .RequireRateLimiting(RateLimitPolicies.Mutation)
             .Produces<RoleChangeDto>(StatusCodes.Status200OK)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
@@ -46,7 +47,7 @@ public static class StaffEndpoints
             .WithTags("Admin Staff")
             .WithName("AdminRevokeRole")
             .WithSummary("Admin ya da Warehouse rolünü alır. Hedefin oturumları kapanır. Admin kendi Admin rolünü alamaz.")
-            .WithDescription("Hatalar: 400 geçersiz rol; 403 yapan artık Admin değil; 404 user_not_found; 409 role_self_demotion, last_admin; 503 busy.")
+            .WithDescription("Hatalar: 400 geçersiz rol; 403 yapan artık Admin değil; 404 user_not_found; 409 role_self_demotion, last_admin, showcase_account_protected (sabit vitrin hesabı); 503 busy.")
             .RequireRateLimiting(RateLimitPolicies.Mutation)
             .Produces<RoleChangeDto>(StatusCodes.Status200OK)
             .ProducesValidationProblem()
@@ -114,6 +115,8 @@ public static class StaffEndpoints
             RoleChangeStatus.Ok => Results.Ok(result.Change),
             RoleChangeStatus.UserNotFound => UserNotFound(),
             RoleChangeStatus.ActorNotAdmin => ApiResults.Problem(StatusCodes.Status403Forbidden, "Bu işlem için yetkiniz yok", ApiErrorCodes.Forbidden),
+            RoleChangeStatus.ShowcaseProtected => ApiResults.Problem(
+                StatusCodes.Status409Conflict, "Vitrin hesaplarının rolleri değiştirilemez", ApiErrorCodes.ShowcaseAccountProtected),
             RoleChangeStatus.SelfDemotion => ApiResults.Problem(
                 StatusCodes.Status409Conflict, "Kendi Admin rolünüzü kaldıramazsınız", ApiErrorCodes.RoleSelfDemotion),
             RoleChangeStatus.LastAdmin => ApiResults.Problem(

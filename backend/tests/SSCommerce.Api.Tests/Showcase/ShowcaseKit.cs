@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SSCommerce.Api.Tests.Auth;
 using SSCommerce.Api.Tests.Database;
+using SSCommerce.Infrastructure.Identity;
 using SSCommerce.Infrastructure.Showcase;
 
 namespace SSCommerce.Api.Tests.Showcase;
@@ -150,11 +152,55 @@ internal static class ShowcaseKit
             "select count(*) from (select user_id, idempotency_key from orders group by 1, 2 having count(*) > 1) x",
     };
 
-    public static async Task AssertInvariantsHoldAsync(PostgresTestDatabase database)
+    /// <summary>İhlal edilen kuralların adları (hepsi sağlanıyorsa boş).</summary>
+    public static async Task<IReadOnlyList<string>> ViolatedInvariantsAsync(PostgresTestDatabase database)
     {
+        var violated = new List<string>();
         foreach (var (rule, sql) in Invariants)
         {
-            Assert.True(await Sql<long>(database, sql) == 0, $"Değişmez ihlal edildi: {rule}");
+            if (await Sql<long>(database, sql) != 0)
+            {
+                violated.Add(rule);
+            }
         }
+
+        return violated;
     }
+
+    public static async Task AssertInvariantsHoldAsync(PostgresTestDatabase database) =>
+        Assert.Empty(await ViolatedInvariantsAsync(database));
+
+    /// <summary>Tarayıcıyı taklit eden oturum (cookie kavanozu elle; bkz. <see cref="TestSession"/>).</summary>
+    internal static TestSession NewSession(WebApplicationFactory<Program> factory) =>
+        new(factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false, AllowAutoRedirect = false }));
+
+    /// <summary>
+    /// Belirli e-postayla ve verilen rollerle kullanıcıyı HTTP DIŞINDAN kurar (ör. vitrin e-postasını önceden "kapmış" biri).
+    /// Parola rastgeledir; gerçek sır değildir.
+    /// </summary>
+    internal static async Task<(Guid Id, string Password)> CreateUserAsync(WebApplicationFactory<Program> factory, string email, params string[] roles)
+    {
+        using var scope = factory.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        var password = AuthApiFixture.NewPassword();
+        var user = new AppUser { UserName = email, Email = email };
+        var created = await users.CreateAsync(user, password);
+        Assert.True(created.Succeeded, string.Join(',', created.Errors.Select(e => e.Code)));
+        foreach (var role in roles)
+        {
+            var added = await users.AddToRoleAsync(user, role);
+            Assert.True(added.Succeeded, string.Join(',', added.Errors.Select(e => e.Code)));
+        }
+
+        return (user.Id, password);
+    }
+
+    /// <summary>E-postaya sahip kullanıcının rolleri, "A,B" biçiminde sıralı (kullanıcı yoksa null).</summary>
+    public static Task<string?> RolesOfAsync(PostgresTestDatabase database, string email) => Sql<string>(
+        database,
+        $"""
+        select string_agg(r."Name", ',' order by r."Name") from "AspNetUsers" u
+        join "AspNetUserRoles" ur on ur."UserId" = u."Id" join "AspNetRoles" r on r."Id" = ur."RoleId"
+        where u."Email" = '{email}'
+        """);
 }

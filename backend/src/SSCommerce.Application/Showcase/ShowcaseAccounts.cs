@@ -30,6 +30,16 @@ public static class ShowcaseAccounts
     /// <summary><c>GET /auth/demo</c> yanıtındaki sıra.</summary>
     public static IReadOnlyList<string> Keys { get; } = [Customer, Admin, Warehouse];
 
+    /// <summary>
+    /// E-posta üç sabit vitrin adresinden biri mi? E-posta büyük/küçük harfe duyarsız karşılaştırılır (Identity de öyle normalleştirir). Rol yönetimi bu hesaplara
+    /// dokunamaz (<c>showcase_account_protected</c>): vitrin Showcase:Enabled kapalıyken de bu üç adres ayrılmış sayılır.
+    /// </summary>
+    public static bool IsShowcaseEmail(string? email) =>
+        email is not null
+        && (string.Equals(email, CustomerEmail, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(email, AdminEmail, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(email, WarehouseEmail, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>Anahtar → sabit e-posta. Büyük/küçük harf duyarlıdır (tam eşleşme); bilinmeyen anahtar false.</summary>
     public static bool TryGetEmail(string? account, out string email)
     {

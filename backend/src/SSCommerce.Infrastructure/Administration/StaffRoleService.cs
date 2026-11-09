@@ -2,6 +2,7 @@ using System.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SSCommerce.Application.Administration;
+using SSCommerce.Application.Showcase;
 using SSCommerce.Domain.Administration;
 using SSCommerce.Infrastructure.Common;
 using SSCommerce.Infrastructure.Identity;
@@ -16,7 +17,7 @@ namespace SSCommerce.Infrastructure.Administration;
 /// <item><c>pg_advisory_xact_lock(hashtextextended('identity:roles', 0))</c>: TÜM rol değişiklikleri (ve ilk-Admin komutu) sıraya girer. Bu kilit
 /// "iki Admin birbirini aynı anda düşürür" yarışını kapatır: ikincisi kilidi aldığında birincinin commit'ini görür.</item>
 /// <item>Yapanın hâlâ Admin olduğu TAZE SQL ile doğrulanır (cookie'deki rol eski olabilir): değilse 403.</item>
-/// <item>Hedef var mı (404); kendini düşürme (409); son Admin: kilitli OLMAYAN Admin sayısı (taze SQL) 2'den azsa Admin alınamaz (409).</item>
+/// <item>Hedef var mı (404); sabit vitrin hesabı mı (409 showcase_account_protected); kendini düşürme (409); son Admin: kilitli OLMAYAN Admin sayısı (taze SQL) 2'den azsa Admin alınamaz (409).</item>
 /// <item>Uygula; ZATEN istenen durumdaysa <c>changed:false</c> ve ne damga ne denetim yazılır.</item>
 /// <item>Hedefin oturumları iptal edilir (<see cref="ISessionRevoker"/>, AYNI DbContext/transaction: rol değişti ama eski cookie yaşıyor durumu olmaz).</item>
 /// <item>Denetim <c>role.grant</c>/<c>role.revoke</c>: yalnız <c>{role}</c> (e-posta, hedef kimliği satırın <c>target_id</c>'sindedir). Commit.</item>
@@ -48,9 +49,17 @@ internal sealed class StaffRoleService(SSCommerceDbContext db, ISessionRevoker s
                 return new RoleChangeResult(RoleChangeStatus.ActorNotAdmin);
             }
 
-            if (!await db.Users.AsNoTracking().AnyAsync(u => u.Id == targetUserId, cancellationToken))
+            var targetEmail = await db.Users.AsNoTracking().Where(u => u.Id == targetUserId).Select(u => u.Email).FirstOrDefaultAsync(cancellationToken);
+            if (targetEmail is null && !await db.Users.AsNoTracking().AnyAsync(u => u.Id == targetUserId, cancellationToken))
             {
                 return new RoleChangeResult(RoleChangeStatus.UserNotFound);
+            }
+
+            // VT-2 (D-092): üç sabit vitrin hesabının rolü değiştirilemez (Showcase:Enabled'dan bağımsız; .example adresleri zaten ayrılmıştır). Aksi halde paylaşılan
+            // demo yöneticisi vitrini bozar (depocudan rol alır) ya da demo hesaba kalıcı Admin verir. Başka kullanıcılara rol verme KAPALI DEĞİLDİR.
+            if (ShowcaseAccounts.IsShowcaseEmail(targetEmail))
+            {
+                return new RoleChangeResult(RoleChangeStatus.ShowcaseProtected);
             }
 
             if (!grant && role == StaffRoleRules.Admin && actorUserId == targetUserId)

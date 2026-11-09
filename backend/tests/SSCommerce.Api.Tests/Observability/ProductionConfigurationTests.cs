@@ -141,6 +141,134 @@ public sealed class ProductionConfigurationTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    // ---------- VT-2 (D-092): vitrin demo girişi herkese açık ortamda KAPALI kalmalıdır (Negative / Edge) ----------
+
+    [Theory]
+    [InlineData("Production", "true")]
+    [InlineData("Production", "True")]
+    [InlineData("Production", "TRUE")]
+    [InlineData("Production", "yes")]
+    [InlineData("Production", "1")]
+    [InlineData("Production", "on")]
+    [InlineData("Production", "evet")]
+    [InlineData("Production", "")]   // boş değer "yok" sayılmaz: bağlayıcı bool'a çeviremez, açılış durur (Ordering:Enabled ile aynı)
+    [InlineData("Staging", "true")]
+    [InlineData("Staging", "True")]
+    [InlineData("Staging", "yes")]
+    [InlineData("Staging", "1")]
+    public void Negative_an_enabled_or_uninterpretable_showcase_switch_stops_a_public_environment(string environment, string value)
+    {
+        var config = Valid();
+        config["Showcase:Enabled"] = value;
+
+        // "yes"/"1" gibi bool olmayan değerlerde bağlayıcı kendi hatasını fırlatabilir; her iki durumda da uygulama AÇILMAZ, ileti anahtarı söyler,
+        // parola sızmaz. "Yanlışlıkla açık sayılma" tek kabul edilmez sonuçtur.
+        var text = Chain(Startup(environment, Connection, config));
+
+        Assert.Contains("Showcase:Enabled", text);
+        Assert.DoesNotContain("hunter2", text);
+    }
+
+    [Theory]
+    [InlineData("Production")]
+    [InlineData("Staging")]
+    public void Negative_the_showcase_refusal_is_reported_together_with_other_problems(string environment)
+    {
+        var config = Valid();
+        config["Showcase:Enabled"] = "true";
+        config.Remove("Ordering:Enabled");
+
+        var text = Chain(Startup(environment, Connection, config));
+
+        Assert.Contains("Showcase:Enabled", text);
+        Assert.Contains("Ordering:Enabled", text);
+    }
+
+    [Theory]
+    [InlineData("Production", null)]
+    [InlineData("Production", "false")]
+    [InlineData("Production", "False")]
+    [InlineData("Staging", null)]
+    [InlineData("Staging", "false")]
+    public async Task A_missing_or_explicitly_false_showcase_switch_lets_a_public_environment_start(string environment, string? value)
+    {
+        var config = Valid();
+        config["Showcase:Enabled"] = value;
+        await using var factory = ApiFactory.Create(environment, Connection, extraConfiguration: config, enforceProductionConfiguration: true);
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/health/live", TestContext.Current.CancellationToken);
+        var demo = await client.GetAsync("/api/v1/auth/demo", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, demo.StatusCode); // ve uç gerçekten kayıtlı değil
+    }
+
+    // Regression (güvenlik denetimi): doğrulayıcı eskiden yalnız Production/Staging adına bakıyordu; ASPNETCORE_ENVIRONMENT=Demo/UAT/Prod + Showcase__Enabled=true
+    // parolasız Admin oturumu açıyordu. Artık Development DIŞINDAKİ her ad reddedilir.
+    [Theory]
+    [InlineData("Prod")]
+    [InlineData("UAT")]
+    [InlineData("Demo")]
+    [InlineData("Preview")]
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    [InlineData("Testing")]
+    [InlineData("Qa")]
+    public void Regression_negative_an_enabled_showcase_switch_is_refused_in_every_environment_except_development(string environment) =>
+        AssertRefused(Startup(environment, Connection, new Dictionary<string, string?> { ["Showcase:Enabled"] = "true" }), "Showcase:Enabled");
+
+    [Theory]
+    [InlineData("Demo", "yes")]
+    [InlineData("Prod", "1")]
+    [InlineData("UAT", "")]
+    [InlineData("Preview", "  ")]
+    public void Regression_negative_an_empty_or_uninterpretable_showcase_switch_is_refused_in_a_non_public_named_environment(string environment, string value) =>
+        AssertRefused(Startup(environment, Connection, new Dictionary<string, string?> { ["Showcase:Enabled"] = value }), "Showcase:Enabled");
+
+    [Theory]
+    [InlineData("Demo", null)]
+    [InlineData("Demo", "false")]
+    [InlineData("UAT", "False")]
+    [InlineData("Prod", null)]
+    public async Task Regression_a_non_public_named_environment_without_the_showcase_switch_still_starts(string environment, string? value)
+    {
+        await using var factory = ApiFactory.Create(
+            environment, Connection, extraConfiguration: new Dictionary<string, string?> { ["Showcase:Enabled"] = value }, enforceProductionConfiguration: true);
+        using var client = factory.CreateClient();
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health/live", TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/auth/demo", TestContext.Current.CancellationToken)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("Testing")]
+    [InlineData("Demo")]
+    [InlineData("Production")]
+    public async Task Regression_negative_the_demo_routes_are_not_registered_outside_development_even_if_the_startup_check_is_bypassed(string environment)
+    {
+        // İkinci savunma katmanı: ApiFactory varsayılanı açılış denetimini KAPATIR (enforceProductionConfiguration: false). Bayrak açık olsa bile uç yoktur.
+        await using var factory = ApiFactory.Create(environment, Connection, extraConfiguration: new Dictionary<string, string?> { ["Showcase:Enabled"] = "true" });
+        using var client = factory.CreateClient();
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/v1/auth/demo", TestContext.Current.CancellationToken)).StatusCode);
+        using var post = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/demo") { Content = new StringContent("{\"account\":\"admin\"}", System.Text.Encoding.UTF8, "application/json") };
+        Assert.Equal(HttpStatusCode.NotFound, (await client.SendAsync(post, TestContext.Current.CancellationToken)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Edge_development_may_enable_the_showcase_switch()
+    {
+        var config = Valid();
+        config["Showcase:Enabled"] = "true";
+        await using var factory = ApiFactory.Create("Development", Connection, extraConfiguration: config, enforceProductionConfiguration: true);
+        using var client = factory.CreateClient();
+
+        var demo = await client.GetAsync("/api/v1/auth/demo", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, demo.StatusCode);
+    }
+
     [Theory]
     [InlineData("http://magaza.example")]            // https değil
     [InlineData("http://localhost:3000")]            // Development dışında localhost http kabul edilmez
