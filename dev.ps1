@@ -1,8 +1,9 @@
 ﻿# Yerel geliştirme: dev veritabanı + backend API (http://localhost:5080) + web (http://localhost:3000) tek komutla.
 # Kullanım (proje kökünde):  .\dev          (dev.cmd bu betiği çalıştırma ilkesine takılmadan açar)
 #                            .\dev -Seed    (önce demo kataloğu yükler; tekrar çalıştırmak güvenli)
+#                            .\dev -Showcase (vitrin modu: katalog + stok + demo hesaplar/siparişler kurulur, giriş sayfasında demo düğmeleri açılır; tekrar çalıştırmak güvenli)
 # Ctrl+C ikisini birlikte durdurur. Parola yalnız çalışma anında kök .env'den okunur; ekrana ve dosyaya yazılmaz.
-param([switch]$Seed)
+param([switch]$Seed, [switch]$Showcase)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 
@@ -28,10 +29,20 @@ $env:ConnectionStrings__Postgres = "Host=127.0.0.1;Port=$port;Database=$($cfg['P
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
 $apiProject = Join-Path $root 'backend/src/SSCommerce.Api'
 
-if ($Seed) {
+if ($Seed -and -not $Showcase) {
   Write-Host '> Demo katalog yükleniyor...' -ForegroundColor Cyan
   dotnet run --project $apiProject -- --seed-demo-catalog
   if ($LASTEXITCODE -ne 0) { throw 'Demo katalog yüklenemedi' }
+}
+
+# Vitrin modu (D-092): --seed-showcase demo kataloğunu da kurar; Showcase__Enabled yalnız bu süreçte açılır (Development dışında API açılmayı reddeder).
+if ($Showcase) {
+  Write-Host '> Vitrin verisi kuruluyor (katalog, stok, demo hesaplar, siparişler)...' -ForegroundColor Cyan
+  dotnet run --project $apiProject -- --seed-showcase
+  if ($LASTEXITCODE -ne 0) { throw 'Vitrin verisi kurulamadı (yukarıdaki hataya bak)' }
+  $env:Showcase__Enabled = 'true'
+} else {
+  $env:Showcase__Enabled = 'false'
 }
 
 # 4) API'yi aynı pencerede arka planda başlat, hazır olmasını bekle

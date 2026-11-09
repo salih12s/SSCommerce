@@ -1,24 +1,16 @@
 import Link from "next/link";
+import { LogoMark } from "@/components/ui/LogoMark";
 
+// Yatay kilit: 40px etiket simgesi + yazı. Koyu üst şeritte yazı ve ip krem (on-ink).
+// aria-label YOK: bağlantının adı görünen "SSCommerce" yazısıdır. Ayrı bir etiket axe label-content-name-mismatch (WCAG 2.5.3) verir,
+// çünkü axe SVG içindeki "SS" metnini de görünen metne katar.
 export function Logo() {
   return (
     <Link href="/" className="flex min-h-11 items-center gap-2.5 text-on-ink">
-      <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true" focusable="false">
-        <path d="M4 4h18l6 6v18H4z" className="fill-accent" />
-        <path d="M22 4v6h6" fill="rgb(22 24 27 / 0.25)" />
-        <text
-          x="15"
-          y="23"
-          textAnchor="middle"
-          fontSize="15"
-          fontWeight="800"
-          className="fill-ink"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          SS
-        </text>
-      </svg>
-      <span className="font-display text-xl font-bold tracking-tight">SSCommerce</span>
+      <LogoMark ground="ink" size={40} />
+      <span className="font-display text-xl font-bold tracking-[-0.02em]">
+        SSCommerce
+      </span>
     </Link>
   );
 }
