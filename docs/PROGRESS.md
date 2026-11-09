@@ -697,3 +697,24 @@ E2E'nin yakaladığı gerçek hata: çıkış → aynı sekmede yeniden giriş �
 
 Doğrulama: typecheck 0, lint 0, test:server 49/0, tam test:e2e 251/0/0 (taban 238 + 13), çubuk testleri `--repeat-each=3` 48/0. 390 ve 1280px gerçek backend ekran görüntüleriyle gözle kontrol (ana ajan inceledi).
 E2E/gözle bulunan gerçek hatalar: çubuğun opaklık geçişi sırasında axe kontrast ihlali (yalnız kaydırma geçişine çevrildi); çubuk sayfa açılışında ürün başlığını örtüyordu (kural "form görünmüyor" yerine "form geçildi" oldu; IntersectionObserver ani atlamaları kaçırdığı için scroll/resize + ResizeObserver). Not: kısa sayfalarda çubuğun görünür aralığı kısadır (footer görününce gizlenir). MD-4 yasal sayfalar ürün sahibinin metinlerini bekliyor.
+
+## Vitrin paketi VT-1..VT-3 (2026-11-08, D-092, D-093) — doğrulama sürüyor
+
+`add6d2c` (VT-1 yasal sayfalar + VT-2 seed/demo giriş kodu) önceki ajanlar API limitiyle kesildikten sonra commit ve push edildi; VT-2 testleri ve kök PNG'nin hariç tutulması eksikti. Bu turda:
+- VT-2 testleri: `Showcase/{DemoSignInApiTests,ShowcaseSeedCommandTests,ShowcaseAccountProtectionTests,SeededShowcaseFixture}.cs`, validator testleri `Observability/ProductionConfigurationTests.cs`. Bir mutasyon denemesi (rol kontrolü kaldırılınca yanlış-rol testleri 3/3 kırmızı).
+- Güvenlik denetimi (security-auditor, statik): yüksek/kritik yok, 4 orta/düşük bulgu → hepsi düzeltildi (D-093). Backend tam koşu `dotnet test -c Release` → 2558/0/0.
+- VT-3: Logo A · Etiket (`components/ui/LogoMark.tsx`, `features/shell/components/Logo.tsx`, `app/icon.svg`, `app/apple-icon.png`, `favicon.ico` kaldırıldı), giriş sayfasında demo kartı (`features/auth/components/DemoLogin.tsx`; yalnız `GET /auth/demo` 200 ise), personel yönlendirmesi (yönetici `/admin`, depocu `/admin/siparisler`), Playwright `showcase` projesi (en sonda, kendi seed'i), `dev.ps1 -Showcase`.
+- E2E ilk koşu: 166 geçti / 42 kaldı / 83 koşmadı. Tek kök neden: logo bağlantısının `aria-label`'ı axe `label-content-name-mismatch` (WCAG 2.5.3) veriyordu; etiket kaldırıldı. Yeniden koşu sürüyor.
+- Kök PNG takipten çıkarıldı ve `.gitignore`'a eklendi (geçmişte `add6d2c`'de duruyor).
+Test edilmeyenler: eşzamanlı iki seed koşusu; yanlış-rol durumunda seed atomik değil (yetki verilmez, testli).
+
+### VT-3 E2E doğrulaması (2026-11-09) — `LOCAL_PASS` · commit edilmedi
+
+Tam `test:e2e` (tek kullanımlık PostgreSQL 17): 285 geçti / 1 kaldı / 5 koşmadı (serial zincir). Tek hata test kaynaklıydı: `page.getByRole("alert")` hem uyarı kutusunu hem Next.js `__next-route-announcer__` öğesini buluyordu (strict mode); 409 ve 429 testleri `main` içine daraltıldı. Ardından `showcase` projesi tek başına (`--no-deps`) 11/11 geçti. Not: tam koşu düzeltmeden sonra tek seferde yeniden çalıştırılmadı; diğer 285 test aynı uygulama koduyla geçti. typecheck 0, lint 0, test:server 49/0. VT-4 (README + GIF) sırada.
+
+### VT-4 Vitrin README'si (2026-11-09) — `LOCAL_PASS` · commit edilmedi
+
+`README.md` başına vitrin bölümü eklendi: demo hesaplar, müşteri/alışveriş/yönetim GIF'leri, ekran görüntüleri, "Bilinen sınırlar (vitrin)", "Künye". Medya `docs/media/` (3 GIF ≈ 8,8 MB + 11 PNG; toplam ≈ 11 MB).
+
+Yöntem: üretim derlemesi + `SSCommerce.E2eHost` API'si (yalıtılmış tek kullanımlık PostgreSQL 17) + `--seed-showcase`; Playwright CDP screencast → 20 fps GIF (`readme-media`). Kayıtlar gerçek uygulamadan; hiçbir ekran taklit değil. Kayıt sırasında demo müşteri bir sipariş verdi (SS-100006) — yalnız geçici veritabanında, silindi.
+Yapılmayanlar: `.\dev -Showcase` bu makinede çalıştırılmadı (dev veritabanı parolası Claude'a kapalı); README'de açıkça yazıldı. GIF boyutları skill'in örneklerinden büyük (mobil 3,2–3,3 MB; çok sayfa geçişi); küçültme istenirse fps/palet düşürülebilir. Gözle kontrol: 3 akışın kare şeritleri ve son kareler incelendi; ara geçişlerde uygulamanın gerçek "yükleniyor" durumları kısa görünür.

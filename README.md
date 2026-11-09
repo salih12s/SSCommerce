@@ -2,6 +2,84 @@
 
 Teknoloji ve yaşam tarzı ürünleri satan, tek satıcılı bir e-ticaret mağazası. Fiziksel ürün satılır, para birimi TRY'dir. **İlk sürümde gerçek ödeme alınmaz.**
 
+<p align="center">
+  <img src="docs/media/ana-sayfa.png" alt="SSCommerce ana sayfa" width="760">
+</p>
+
+**Bölümler:** [Vitrin](#vitrin-hesap-açmadan-dene) · [Müşteri tarafı](#müşteri-tarafı) · [Yönetim paneli](#yönetim-paneli) · [Bilinen sınırlar](#bilinen-sınırlar-vitrin) · [Künye](#künye) · [Neden bu yapı?](#neden-bu-yapı) · [Çalıştırma](#çalıştırma-windows-powershell)
+
+## Vitrin: hesap açmadan dene
+
+Giriş sayfasında üç düğme vardır: **Demo müşteri**, **Demo yönetici**, **Demo depocu**. Her biri sabit, örnek veriyle dolu bir vitrin hesabına parolasız oturum açar. Böylece projeyi gezmek için kayıt olmak ya da Admin yetkisi vermek gerekmez.
+
+<p align="center">
+  <img src="docs/media/tur-musteri.gif" alt="Demo müşteri turu: giriş, favoriler, siparişler, sipariş ayrıntısı" width="320">
+</p>
+
+- **Demo müşteri:** iki adres, altı favori, sepette iki ürün ve gerçek sipariş servisinden geçmiş beş sipariş (alındı, hazırlanıyor, kargoda, teslim edildi, iptal edildi).
+- **Demo yönetici:** `/admin` paneli (özet, ürünler, kategoriler, stok, depolar, siparişler, raporlar, kullanıcılar).
+- **Demo depocu:** yalnız sipariş ekranları ve ileri durum geçişleri; teslimat adresi ve telefonu görmez (D-071).
+- Düğmeler yalnız API'de `Showcase:Enabled=true` ise görünür. Bu ayar **yalnız Development ortamında** açılabilir; Production'da API açılışta reddeder (D-092, D-093). Demo hesapların parolası rastgeledir ve hiçbir yerde saklanmaz; `POST /api/v1/auth/demo` yalnız bu üç sabit e-postayı hedefler, başka kullanıcıya oturum açamaz.
+
+Yerelde açmak (`.\dev -Showcase`: katalog + stok + demo hesaplar kurulur) için aşağıdaki [Çalıştırma](#çalıştırma-windows-powershell) bölümündeki kurulum gerekir. Bu komutun kendisi README için yapılan kayıtlarda **çalıştırılmadı** (bkz. [Künye](#künye)).
+
+## Müşteri tarafı
+
+<p align="center">
+  <img src="docs/media/alisveris-siparis.gif" alt="Kategori, ürün, sepete ekle, sepet, teslimat özeti, sipariş oluştur" width="320">
+</p>
+
+Kategori → ürün → sepet → teslimat özeti → sipariş. **Ödeme alınmaz**: sipariş ödenmemiş bir kayıt olarak oluşur, kargo ve genel toplam hesaplanmaz, stok sipariş anında düşer. Tutarları sunucu güncel fiyattan hesaplar; arayüz iş mantığı içermez.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/media/urun.png" alt="Ürün sayfası" width="360"><br><sub>Ürün sayfası: teslimat ve iptal koşulları açıkça yazılı</sub></td>
+    <td align="center"><img src="docs/media/giris-demo.png" alt="Giriş sayfasındaki demo düğmeleri" width="360"><br><sub>Giriş sayfası: tek kolon, altta "Hesap açmadan dene" kartı</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/media/m-siparisler.png" alt="Siparişlerim" width="200"><br><sub>Siparişlerim: durum etiketleri</sub></td>
+    <td align="center"><img src="docs/media/m-siparis-detay.png" alt="Sipariş ayrıntısı" width="200"><br><sub>Sipariş ayrıntısı: kalemler, zaman çizelgesi, iptal</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/media/m-favoriler.png" alt="Favorilerim" width="200"><br><sub>Favorilerim</sub></td>
+    <td align="center"><img src="docs/media/m-sepet.png" alt="Sepet" width="200"><br><sub>Sepet: stok ayrılmaz, uyarı yazılı</sub></td>
+  </tr>
+</table>
+
+## Yönetim paneli
+
+<p align="center">
+  <img src="docs/media/yonetim-paneli.gif" alt="Demo yönetici: özet, ürünler, siparişler, sipariş ayrıntısı" width="720">
+</p>
+
+Rol ve yetki yalnız API'dedir; arayüzdeki `/admin` kapısı yönlendirme kolaylığıdır. Pano "ciro" göstermez: ödeme kaydı olmadığı için yalnız **ödenmemiş açık sipariş ara toplamı** vardır. Ayrıntı: [Yönetim paneli (`/admin`, Faz 8)](#yönetim-paneli-admin-faz-8).
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/media/yonetim-ozet.png" alt="Yönetim özeti" width="360"><br><sub>Özet: sipariş hattı ve ödenmemiş açık sipariş toplamı</sub></td>
+    <td align="center"><img src="docs/media/yonetim-urunler.png" alt="Ürün yönetimi" width="360"><br><sub>Ürünler: durum, varyant sayısı, en düşük fiyat</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/media/yonetim-stok.png" alt="Stok" width="360"><br><sub>Stok: depo bazlı, hareket defteri ile</sub></td>
+    <td align="center"><img src="docs/media/yonetim-siparisler.png" alt="Siparişler" width="360"><br><sub>Siparişler: durum filtresi, yaş, ara toplam</sub></td>
+  </tr>
+</table>
+
+## Bilinen sınırlar (vitrin)
+
+- **Canlıya alınmadı.** Proje bir portföy vitrinidir; barındırma, alan adı ve herkese açık TLS yoktur (bkz. [Üretim-eşdeğeri dağıtım](#üretim-eşdeğeri-dağıtım-faz-9)).
+- **Vitrin hesapları ortaktır.** Ziyaretçiye özel geçici hesap yoktur (D-092): demo yönetici kataloğu ve stoğu değiştirebilir, değişiklik sonraki demo oturumlarında görünür. `--seed-showcase` tekrar çalıştırılabilir (idempotent) ama yöneticinin yaptığı değişiklikleri geri almaz.
+- **Ödeme, iade, kargo hesabı, e-posta doğrulama, parola sıfırlama yok.** Ürünler ve fiyatlar kurgusaldır.
+- **Yasal sayfalar** (`/hakkimizda`, `/iletisim`, `/gizlilik-kvkk`, `/mesafeli-satis`, `/cerez-politikasi`) örnek metindir; hukuki danışmanlık değildir. Gerçek bir satıştan önce ürün sahibinin metinleriyle değiştirilmelidir.
+- Koyu tema yoktur (açık tema ana temadır).
+
+## Künye
+
+- Görseller ve GIF'ler **gerçek uygulamadan** kaydedildi (2026-11-09): üretim derlemesi (`next build`) + `SSCommerce.E2eHost` API'si (yalıtılmış, tek kullanımlık PostgreSQL 17) + `--seed-showcase`. Hiçbir ekran taklit değildir. Kayıt, Playwright'in Chromium'unda CDP screencast ile yapıldı (kayıpsız kareler, 20 fps GIF).
+- Kayıtlar `.\dev -Showcase` ile **alınmadı**: o komut geliştirme veritabanını kullanır ve bu makinede README kaydı için çalıştırılmadı.
+- Tüm veri sentetiktir (ürünler, fiyatlar, hesaplar, siparişler). Ürün görsellerinin kaynakları uygulamanın `/gorsel-kaynaklari` sayfasındadır.
+- Testler ve kanıtlar: [docs/PROGRESS.md](docs/PROGRESS.md) (vitrin: "Vitrin paketi VT-1..VT-3" ve "VT-3 E2E doğrulaması").
+
 ## Neden bu yapı?
 
 - **ASP.NET Core 10 + EF Core 10 + PostgreSQL** (`backend/`): fiyat, stok ve sipariş kuralları gibi iş mantığının tek sahibi.

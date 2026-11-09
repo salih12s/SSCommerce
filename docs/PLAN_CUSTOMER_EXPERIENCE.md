@@ -82,7 +82,7 @@ Proje canlıya alınmayacak bir portföy vitrini. Kararlar: logo **A · Etiket**
 | VT-1 | MD-4 örnek yasal/kurumsal sayfalar | frontend-dev |
 | VT-2 | Vitrin verisi + demo giriş ucu (`Showcase:Enabled`) | backend-dev |
 | VT-3 | Logo A (SVG bileşen, favicon/app icon), giriş sayfasında demo düğmeleri, `dev.ps1 -Showcase` | frontend-dev + ana ajan |
-| VT-4 | Vitrin README'si + GIF/ekran görüntüleri (SS Filo düzeni) | ana ajan (readme-media) |
+| VT-4 | Vitrin README'si + GIF/ekran görüntüleri (SS Filo düzeni) | ana ajan (readme-media) — TAMAM 2026-11-09 |
 
 ### VT-2 sözleşme
 - `Showcase:Enabled` (varsayılan `false`). `ProductionConfigurationValidator` Production'da `true`'yu reddeder; dağıtım dosyaları bunu hiç açmaz.
