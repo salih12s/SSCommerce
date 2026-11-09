@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using SSCommerce.Api.Observability;
 
 namespace SSCommerce.Api.Health;
 
@@ -27,6 +28,8 @@ public static class HealthEndpoints
 
     private static Task WriteReport(HttpContext context, HealthReport report)
     {
+        // Faz 9: readiness geçişleri ve durum göstergesi, /health/ready sonucundan (postgres + migrations denetimleri) türetilir.
+        context.RequestServices.GetRequiredService<SscMetrics>().RecordReadiness(report.Status == HealthStatus.Healthy);
         context.Response.ContentType = "application/json; charset=utf-8";
         var body = new
         {

@@ -3,13 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node server.mjs --dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node server.mjs",
+    "test:server": "node --test tests/server/*.test.mjs",
+    "test:proxy": "node tests/check-proxy-rate-limit.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "e2e": "playwright test",
-    "test:e2e": "npm run build && npm run e2e"
+    "e2e": "node tests/run-e2e.mjs",
+    "test:prod": "playwright test -c playwright.prod.config.ts",
+    "test:e2e": "node tests/run-e2e.mjs --build"
   },
   "dependencies": {
     "next": "16.4.3",

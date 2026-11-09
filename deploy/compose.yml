@@ -1,0 +1,204 @@
+# SSCommerce üretim-eşdeğeri yığın: edge (Caddy, TLS) -> web (Next özel sunucu) -> api (ASP.NET) -> db (PostgreSQL 17).
+# Geliştirme yığınından (kök docker-compose.yml, proje "sscommerce", 5433, volume sscommerce-pgdata) TAMAMEN ayrıdır:
+# proje adı, ağ, volume'ler ve portlar farklı. Bu dosya geliştirme veritabanına ASLA bağlanmaz.
+#
+#   sh deploy/scripts/gen-env.sh        (rastgele sırlarla deploy/.env.stack üretir; sırları göstermez)
+#   docker compose -f deploy/compose.yml --env-file deploy/.env.stack up -d --build
+#
+# Ağ: "backend" ağı internal (internetten çıkış YOK, ana makineden erişim YOK). Yalnız edge ayrıca "edge" ağındadır ve
+# yalnız 127.0.0.1'e port yayımlar. web/api/db hiçbir port yayımlamaz. Sabit IP'ler güvenilir-proxy listeleri içindir (rate limit bütünlüğü).
+name: sscommerce-stack
+
+x-hardened: &hardened
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+  pids_limit: 512
+
+services:
+  db:
+    image: postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sscommerce}
+      POSTGRES_USER: ${PG_SUPERUSER:-ssc_pgadmin}
+      POSTGRES_PASSWORD: ${PG_SUPERUSER_PASSWORD:?deploy/.env.stack içinde tanımlı olmalı}
+      SSC_OWNER_PASSWORD: ${SSC_OWNER_PASSWORD:?}
+      SSC_APP_PASSWORD: ${SSC_APP_PASSWORD:?}
+      SSC_BACKUP_PASSWORD: ${SSC_BACKUP_PASSWORD:?}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      backend:
+        ipv4_address: 172.28.77.20
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+      target: migrate
+    image: sscommerce-migrate:${SSC_VERSION:-local}
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: ${POSTGRES_DB:-sscommerce}
+      PGUSER: ssc_owner
+      PGPASSWORD: ${SSC_OWNER_PASSWORD:?}
+    networks: [backend]
+
+  api:
+    <<: *hardened
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+      target: api
+      args:
+        BUILD_VERSION: ${SSC_VERSION:-local}
+        GIT_SHA: ${SSC_GIT_SHA:-unknown}
+    image: sscommerce-api:${SSC_VERSION:-local}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Dinleyici yalnız bu konteynerin ağ adresine bağlanır; port yayımlanmaz. Metrik dinleyicisi (Metrics__Port) ayrı iç porttur.
+      ASPNETCORE_URLS: http://172.28.77.12:8080
+      Metrics__Port: "9100"
+      Metrics__BindAddress: 172.28.77.12
+      AllowedHosts: 172.28.77.12
+      ConnectionStrings__Postgres: Host=db;Port=5432;Database=${POSTGRES_DB:-sscommerce};Username=ssc_app;Password=${SSC_APP_PASSWORD:?};Maximum Pool Size=30
+      Security__AllowedOrigins__0: ${SSC_PUBLIC_ORIGIN:?deploy/.env.stack içinde SSC_PUBLIC_ORIGIN (tarayıcının gördüğü https origin) tanımlı olmalı}
+      Security__TrustedProxies__0: 172.28.77.11
+      DataProtection__KeysPath: /keys
+      # Üretim sipariş politikası sahip kararı bekliyor (D-072, PRODUCTION_ORDERING_POLICY_PENDING): varsayılan KAPALI. Yalnız yalıtılmış sınama için true.
+      Ordering__Enabled: ${ORDERING_ENABLED:-false}
+      HostOptions__ShutdownTimeout: 00:00:30
+      Logging__Console__FormatterName: json
+      # EF SQL komut günlüğü üretimde KAPALI (gürültü + sorgu metni); uyarı ve üstü kalır.
+      Logging__LogLevel__Microsoft.EntityFrameworkCore: Warning
+      ASPNETCORE_HTTP_PORTS: ""
+    volumes:
+      - dpkeys:/keys
+    networks:
+      backend:
+        ipv4_address: 172.28.77.12
+    stop_grace_period: 40s
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://172.28.77.12:8080/health/ready"]
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 15s
+
+  web:
+    <<: *hardened
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      args:
+        API_BASE_URL: http://172.28.77.12:8080
+        VERSION: ${SSC_VERSION:-local}
+        GIT_SHA: ${SSC_GIT_SHA:-unknown}
+    image: sscommerce-web:${SSC_VERSION:-local}
+    # Kök dosya sistemi salt okunur; Next çalışma zamanı önbelleği (görsel optimizasyonu vb.) için yalnız bu dizin yazılabilir ve geçicidir (yeniden başlatmada silinir).
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /app/.next/cache:rw,noexec,nosuid,uid=1000,gid=1000,size=128m
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      PORT: "3000"
+      WEB_HOST: 172.28.77.11
+      API_BASE_URL: http://172.28.77.12:8080
+      # Yalnız kenarın (Caddy) tam adresi güvenilir; başka eş XFF/XFP sağlayamaz.
+      WEB_TRUSTED_PROXIES: 172.28.77.10
+    networks:
+      backend:
+        ipv4_address: 172.28.77.11
+    stop_grace_period: 20s
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://172.28.77.11:3000/healthz"]
+      interval: 10s
+      timeout: 4s
+      retries: 6
+      start_period: 15s
+
+  edge:
+    <<: *hardened
+    image: caddy:2-alpine@sha256:78bd35025c7ba85961dd149ae670315129954e77abe2383ac47c89106b35ade9
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      EDGE_SITE: ${EDGE_SITE:-localhost}
+      EDGE_HTTPS_PORT: "8443"
+      EDGE_HTTP_PORT: "8080"
+      EDGE_PORT_SUFFIX: ":8443"
+      HSTS_MAX_AGE: ${HSTS_MAX_AGE:-300}
+      WEB_UPSTREAM: 172.28.77.11:3000
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    ports:
+      - "127.0.0.1:${EDGE_HTTPS_PORT_PUBLISHED:-8443}:8443"
+      - "127.0.0.1:${EDGE_HTTP_PORT_PUBLISHED:-8080}:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      backend:
+        ipv4_address: 172.28.77.10
+      edge: {}
+
+  # --- Bakım araçları (varsayılan `up`ta ÇALIŞMAZ): docker compose ... --profile tools run --rm backup ---
+  backup:
+    profiles: ["tools"]
+    image: postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGDATABASE: ${POSTGRES_DB:-sscommerce}
+      PGUSER: ssc_backup
+      PGPASSWORD: ${SSC_BACKUP_PASSWORD:?}
+    volumes:
+      - backups:/backups
+      - ./scripts/backup-inner.sh:/backup-inner.sh:ro
+    entrypoint: ["sh", "/backup-inner.sh"]
+    networks: [backend]
+
+networks:
+  backend:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.28.77.0/24
+  edge: {}
+
+volumes:
+  pgdata:
+    name: sscommerce-stack-pgdata
+  dpkeys:
+    name: sscommerce-stack-dpkeys
+  caddy_data:
+    name: sscommerce-stack-caddy-data
+  caddy_config:
+    name: sscommerce-stack-caddy-config
+  backups:
+    name: sscommerce-stack-backups

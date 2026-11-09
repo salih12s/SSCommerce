@@ -16,6 +16,7 @@ jobs:
   backend:
     name: Backend (.NET)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:17-alpine
@@ -32,7 +33,7 @@ jobs:
           --health-retries 10
     env:
       # Yalnızca CI içindeki geçici konteyner için; gerçek sır değildir.
-      SSCOMMERCE_TEST_POSTGRES: Host=localhost;Port=5432;Database=sscommerce_ci;Username=sscommerce;Password=ci-only-password
+      SSCOMMERCE_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=sscommerce_ci;Username=sscommerce;Password=ci-only-password
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -48,11 +49,32 @@ jobs:
   web:
     name: Web (Next.js)
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: sscommerce_ci
+          POSTGRES_USER: sscommerce
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sscommerce -d sscommerce_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      SSCOMMERCE_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=sscommerce_ci;Username=sscommerce;Password=ci-only-password
+      API_BASE_URL: http://127.0.0.1:5081
     defaults:
       run:
         working-directory: apps/web
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -64,13 +86,17 @@ jobs:
         run: npm run lint
       - name: Typecheck
         run: npm run typecheck
+      - name: HTTP ingress tests
+        run: npm run test:server
       - name: Build
         run: npm run build
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-      # Build yukarıda bir kez alındı; burada yalnızca Playwright koşar (webServer `next start`).
+      # Build bir kez alınır; Playwright aynı çıktıyı güvenli Node giriş katmanıyla açar.
       - name: E2E (Playwright + axe)
         run: npm run e2e
+      - name: Proxy rate limit
+        run: npm run test:proxy
       - name: Upload Playwright results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -79,3 +105,21 @@ jobs:
           path: apps/web/test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  # Faz 9: üretim imajları derlenir (itme YOK, sır YOK). Yerel eşdeğeri: docker compose -f deploy/compose.yml --env-file deploy/stack.env.example build
+  images:
+    name: Release images (build only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose file is valid
+        run: docker compose -f deploy/compose.yml --env-file deploy/stack.env.example config -q
+      - name: Workflow lint (actionlint)
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color=false .github/workflows/ci.yml
+      - name: Build API image
+        run: docker build -f deploy/Dockerfile.api --target api -t sscommerce-api:ci --build-arg BUILD_VERSION=0.0.0-ci --build-arg GIT_SHA="$GITHUB_SHA" .
+      - name: Build migration image
+        run: docker build -f deploy/Dockerfile.api --target migrate -t sscommerce-migrate:ci .
+      - name: Build web image
+        run: docker build -f deploy/Dockerfile.web -t sscommerce-web:ci --build-arg API_BASE_URL=http://172.28.77.12:8080 --build-arg VERSION=ci --build-arg GIT_SHA="$GITHUB_SHA" .

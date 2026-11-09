@@ -38,3 +38,6 @@ playwright/.cache/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Yerel tasarım referans görseli (depoya girmez)
+/Karanlık Temalı Teknoloji Mağazası Arayüzü.png

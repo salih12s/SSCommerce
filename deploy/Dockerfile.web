@@ -1,0 +1,38 @@
+# syntax=docker/dockerfile:1
+# SSCommerce web (Next.js ÖZEL SUNUCU: `node server.mjs`; `next start` ve `output: standalone` KULLANILMAZ — forwarding.mjs/privacy.mjs/CSP girişi server.mjs'tedir).
+# Bağlam: depo kökü.   docker build -f deploy/Dockerfile.web --build-arg API_BASE_URL=http://<api-adresi>:8080 .
+ARG NODE_IMAGE=node:24-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8
+
+FROM ${NODE_IMAGE} AS deps
+WORKDIR /app
+COPY apps/web/package.json apps/web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+FROM deps AS build
+# API_BASE_URL `next build` sırasında rewrites'a GÖMÜLÜR (next.config.ts) ve src/proxy.ts çalışma zamanında aynı değeri okur: ikisi AYNI olmalı.
+ARG API_BASE_URL
+RUN test -n "$API_BASE_URL" || (echo "API_BASE_URL build-arg zorunlu" >&2; exit 1)
+ENV API_BASE_URL=$API_BASE_URL NEXT_TELEMETRY_DISABLED=1
+COPY apps/web/ ./
+RUN npm run build
+
+FROM ${NODE_IMAGE} AS prod-deps
+WORKDIR /app
+COPY apps/web/package.json apps/web/package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+
+FROM ${NODE_IMAGE} AS web
+ARG VERSION=0.0.0-local
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="sscommerce-web" org.opencontainers.image.version="${VERSION}" org.opencontainers.image.revision="${GIT_SHA}"
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
+WORKDIR /app
+COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/.next ./.next
+COPY --from=build --chown=node:node /app/public ./public
+COPY --from=build --chown=node:node /app/package.json /app/next.config.ts /app/server.mjs ./
+COPY --from=build --chown=node:node /app/server ./server
+# Next çalışma zamanı önbelleği yazılabilir olmalı (kök dosya sistemi salt okunur çalıştırılır).
+RUN mkdir -p .next/cache && chown -R node:node .next/cache
+USER node
+ENTRYPOINT ["node", "server.mjs"]

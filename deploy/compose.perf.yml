@@ -1,0 +1,10 @@
+# YALNIZ yük/tutarlılık sınaması için katman. ÜRETİMDE KULLANILMAZ.
+# Tek bir yük üreticisi tek IP'den geldiği için IP başına hız sınırları (varsayılan 10/60/120 dk) ölçümü 429'la bozar; burada yükseltilir.
+# Sipariş sınırları (Ordering__*) DEĞİŞTİRİLMEZ: üretim varsayılanları (3 açık / 10 günlük) test edilir.
+#   docker compose -f deploy/compose.yml -f deploy/compose.perf.yml --env-file deploy/.env.stack up -d api
+services:
+  api:
+    environment:
+      Security__RateLimit__CredentialsPermitLimit: "100000"
+      Security__RateLimit__GeneralPermitLimit: "100000"
+      Security__RateLimit__MutationPermitLimit: "100000"

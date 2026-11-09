@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Fixture ucunun gerçek PostgreSQL'e karşı sınanması için (SSCommerce.Api.Tests/Admin/FixtureControlTests). -->
+    <InternalsVisibleTo Include="SSCommerce.Api.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/SSCommerce.Api/SSCommerce.Api.csproj" />
+    <ProjectReference Include="../../src/SSCommerce.Infrastructure/SSCommerce.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
