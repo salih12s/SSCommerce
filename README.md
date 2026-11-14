@@ -1,10 +1,39 @@
-# SSCommerce
-
-Teknoloji ve yaşam tarzı ürünleri satan, tek satıcılı bir e-ticaret mağazası. Fiziksel ürün satılır, para birimi TRY'dir. **İlk sürümde gerçek ödeme alınmaz.**
+<h1 align="center">SSCommerce — E-Ticaret Mağazası ve Yönetim Paneli</h1>
 
 <p align="center">
-  <img src="docs/media/ana-sayfa.png" alt="SSCommerce ana sayfa" width="760">
+  Teknoloji ve yaşam tarzı ürünleri satan, tek satıcılı bir e-ticaret mağazası:<br>
+  katalog, sepet, idempotent sipariş, favoriler, müşteri hesabı ve rol bazlı <code>/admin</code> paneli (katalog, stok, depo, sipariş).<br>
+  Fiziksel ürün, TRY. <b>Gerçek ödeme alınmaz.</b>
 </p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/ASP.NET_Core-10-512BD4?logo=dotnet&logoColor=white" alt="ASP.NET Core 10">
+  <img src="https://img.shields.io/badge/EF_Core-10-512BD4?logo=dotnet&logoColor=white" alt="EF Core 10">
+  <img src="https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 17">
+  <img src="https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white" alt="Next.js 16">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" alt="React 19">
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5">
+  <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4">
+  <img src="https://img.shields.io/badge/xUnit-2559_test-5E1F87" alt="xUnit 2559 test">
+  <img src="https://img.shields.io/badge/Playwright-E2E-2EAD33?logo=playwright&logoColor=white" alt="Playwright E2E">
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white" alt="Docker Compose">
+  <img src="https://img.shields.io/badge/Caddy-TLS-1F88C0?logo=caddy&logoColor=white" alt="Caddy TLS">
+</p>
+
+<p align="center">
+  <img src="docs/media/ana-sayfa.png" alt="SSCommerce ana sayfa" width="100%">
+</p>
+
+---
+
+**Öne çıkanlar**
+
+- **İş mantığı yalnız backend'de:** fiyat, stok ve sipariş tutarlarını sunucu hesaplar; para API'de kuruş (`long`), veritabanında `numeric(18,2)`.
+- **Eşzamanlılığa dayanıklı sipariş:** `Idempotency-Key` ile aynı istek iki kez sipariş açmaz; stok düşümü ve iptal iadesi tek transaction'da, hareket defteriyle.
+- **Rol bazlı veri gizleme:** Admin / Depo / Müşteri yetkisi API'de; depocu teslimat adresini ve telefonu API yanıtında bile görmez.
+- **Güvenlik:** `__Host-` HttpOnly çerez oturumu, CSRF, nonce tabanlı CSP, güvenilir proxy zinciri, sahte `X-Forwarded-For` ile aşılamayan hız sınırı.
+- **Üretim-eşdeğeri yığın:** Caddy TLS → Next.js → ASP.NET → PostgreSQL (Docker Compose, iç ağ, en az yetkili DB rolleri); yedek/geri yükleme ve migration yükseltme provaları betikli.
+- **Test:** 2559 backend testi gerçek PostgreSQL 17'ye karşı, Playwright ile tarayıcı testleri (axe erişilebilirlik ve CSP ihlali kontrolü dahil).
 
 **Bölümler:** [Vitrin](#vitrin-hesap-açmadan-dene) · [Müşteri tarafı](#müşteri-tarafı) · [Yönetim paneli](#yönetim-paneli) · [Bilinen sınırlar](#bilinen-sınırlar-vitrin) · [Künye](#künye) · [Neden bu yapı?](#neden-bu-yapı) · [Çalıştırma](#çalıştırma-windows-powershell)
 
@@ -83,7 +112,7 @@ Rol ve yetki yalnız API'dedir; arayüzdeki `/admin` kapısı yönlendirme kolay
 ## Neden bu yapı?
 
 - **ASP.NET Core 10 + EF Core 10 + PostgreSQL** (`backend/`): fiyat, stok ve sipariş kuralları gibi iş mantığının tek sahibi.
-- **Next.js + TypeScript + Tailwind** (`apps/web/`): vitrin ve ileride `/admin`. İş mantığı içermez, API'yi same-origin proxy üzerinden çağırır.
+- **Next.js + TypeScript + Tailwind** (`apps/web/`): vitrin ve `/admin` paneli. İş mantığı içermez, API'yi same-origin proxy üzerinden çağırır.
 - Ayrıntılar için: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DECISIONS.md](docs/DECISIONS.md), [docs/ROADMAP.md](docs/ROADMAP.md). İlerleme kaydı: [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## Gereksinimler
@@ -183,7 +212,7 @@ Sepet, teslimat adresleri (`/hesabim/adresler`) ve teslimat özeti (`/checkout`)
 
 Sipariş `/checkout` üzerinden verilir, `/siparisler` ve `/siparisler/{id}` sayfalarında izlenir. **Ödeme alınmaz:** sipariş ödenmemiş bir kayıttır, kargo ve genel toplam hesaplanmaz, stok sipariş anında düşer ve kendiliğinden geri dönmez. Müşteri yalnız `placed` durumundaki kendi siparişini iptal eder; stok özgün depoya döner.
 
-Demo katalog için stok seed edilmez (D-047), yani yeni kurulumda her ürün "Stokta yok" görünür ve sepete eklenemez, bu yüzden geliştirme ortamında sipariş verilemez. Stok yalnız Admin rolüyle `POST /api/v1/admin/inventory/receive` üzerinden girilir; varsayılan admin hesabı yoktur ve admin arayüzü Faz 8'dedir. Tarayıcıda stoklu akışı görmek için E2E ortamı kullanılır: sabit stok verisini `SSCommerce.E2eHost` kurar.
+Demo katalog için stok seed edilmez (D-047), yani yeni kurulumda her ürün "Stokta yok" görünür ve sepete eklenemez, bu yüzden geliştirme ortamında sipariş verilemez. Stok yalnız Admin rolüyle `POST /api/v1/admin/inventory/receive` üzerinden girilir; varsayılan admin hesabı yoktur (stok `/admin/stok` ekranından da girilir). Tarayıcıda stoklu akışı görmek için E2E ortamı kullanılır: sabit stok verisini `SSCommerce.E2eHost` kurar.
 
 ### Web giriş katmanı ve güvenilen proxy
 
@@ -237,6 +266,6 @@ Dev yığınından (kök `docker-compose.yml`, 5433) ayrıdır. **Herkese açık
 
 ## Henüz yapılmayanlar
 
-- Faz 9 (üretim hazırlığı) yerel üretim-eşdeğeri yığında doğrulandı; gerçek barındırma, herkese açık TLS ve hosted CI sahip eylemi/dış bağımlılık bekliyor. ERP/Admin (8) push edildi (`c8bba63`). Ayrıntı: [ROADMAP](docs/ROADMAP.md). Vitrindeki ürünler ve fiyatlar **demo verisidir**; ödeme yoktur.
+- Planlanan bütün fazlar (0–9) ve vitrin paketi tamamlandı ve `main`'e birleştirildi (PR #1, 2026-11-09). Faz 9 (üretim hazırlığı) yerel üretim-eşdeğeri yığında doğrulandı; gerçek barındırma, herkese açık TLS ve hosted CI dış bağımlılık. Ayrıntı: [ROADMAP](docs/ROADMAP.md). Vitrindeki ürünler ve fiyatlar **demo verisidir**; ödeme yoktur.
 - MVP dışı: gerçek ödeme entegrasyonu ve stok rezervasyonu.
 - Uzak CI: GitHub hesabının faturalandırma kilidi yüzünden çalışmıyor (BLOCKED_EXTERNAL); bütün kontroller yerelde koşuluyor.

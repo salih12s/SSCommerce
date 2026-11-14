@@ -1,6 +1,6 @@
 # SSCommerce sürüm notları ve yayın hazırlık durumu
 
-**Durum:** yayına HAZIR DEĞİL; yalnızca yerel üretim-eşdeğeri yığında doğrulandı (`LOCAL_PRODUCTION_EQUIVALENT_PASS` kapsamı için bkz. `docs/PHASE_9_VERIFICATION.md`). Kod `feat/phase-3-4-complete` dalına push edildi (2026-11-08, `919c7a9` + docs commit'i); herkese açık bir yayın, sürüm etiketi, PR ya da `main` birleştirmesi **yok**; hepsi sahip onayı bekler. Önerilen sürüm adı yayın anında sahip tarafından seçilir (`SSC_VERSION`).
+**Durum:** yayına HAZIR DEĞİL; yalnızca yerel üretim-eşdeğeri yığında doğrulandı (`LOCAL_PRODUCTION_EQUIVALENT_PASS` kapsamı için bkz. `docs/PHASE_9_VERIFICATION.md`). Kod PR #1 ile 2026-11-09'da `main`'e birleştirildi; herkese açık bir yayın ve sürüm etiketi **yok**. Önerilen sürüm adı yayın anında sahip tarafından seçilir (`SSC_VERSION`).
 
 ## Uygulama NE YAPAR
 
