@@ -1,7 +1,7 @@
 # SSCommerce İlerleme Kaydı
 
 Tek kalıcı ilerleme kaynağı. Durumlar: `PASS` · `FAIL` · `NOT_VERIFIED` (çalıştırılamadı) · `BLOCKED_EXTERNAL` (dış etken) · `PENDING_APPROVAL` (kullanıcı izni) · `PENDING_REMOTE_CI`.
-Bunlardan yalnızca `PASS` başarıdır. Kanıtlar ilgili bölümde belirtilen 2026-10-28/29 tarihlerinde bu makinede gerçekten çalıştırılmıştır. "Ana ajan" olarak işaretlenenler, alt ajan teslimlerinden sonra ana ajanın kendi koşusudur. Güncel kabul: **2026-11-02 Faz 7 yerel PASS; kod commit'i `508458b`, belge commit'i ve push sonrası `feat/phase-3-4-complete` dalında (`main`'e birleştirilmedi)**.
+Bunlardan yalnızca `PASS` başarıdır. Kanıtlar ilgili bölümde belirtilen 2026-10-28/29 tarihlerinde bu makinede gerçekten çalıştırılmıştır. "Ana ajan" olarak işaretlenenler, alt ajan teslimlerinden sonra ana ajanın kendi koşusudur. Güncel kabul: **Fazlar 0–9 ve vitrin paketi (VT-1..VT-4) tamamlandı; `feat/phase-3-4-complete` PR #1 ile 2026-11-09'da `main`'e birleştirildi** (ayrıntı: en alttaki "Durum (2026-11-14)").
 
 ## Özet
 
@@ -671,11 +671,11 @@ Belirtim: `GOAL_PHASE_9_PRODUCTION_EN.md` (git'te izlenmiyor; sahip talimatı). 
 
 ## Faz sonrası: frontend modüler yapı (2026-11-08, D-087)
 
-**Durum: `LOCAL_PASS` · commit edilmedi.** Kullanıcı isteğiyle `apps/web/src` düz `components/` + `lib/` yapısından `features/<özellik>/` modüllerine taşındı (saf taşıma, `git mv`; davranış değişmedi). Yeni yapı ve izin tablosu: `docs/ARCHITECTURE.md` "Frontend". Sınırlar `eslint.config.mjs` `import/no-restricted-paths` ile zorlanır; negatif kanıt: `features/orders` içinden `@/features/cart/cart` ve `lib/format.ts` içinden özellik import'u lint hatası verdi, geri alındı.
+**Durum: `LOCAL_PASS` · commit `2f28a9a`.** Kullanıcı isteğiyle `apps/web/src` düz `components/` + `lib/` yapısından `features/<özellik>/` modüllerine taşındı (saf taşıma, `git mv`; davranış değişmedi). Yeni yapı ve izin tablosu: `docs/ARCHITECTURE.md` "Frontend". Sınırlar `eslint.config.mjs` `import/no-restricted-paths` ile zorlanır; negatif kanıt: `features/orders` içinden `@/features/cart/cart` ve `lib/format.ts` içinden özellik import'u lint hatası verdi, geri alındı.
 
 Doğrulama: typecheck 0 hata · lint 0 hata · build başarılı · test:server 40/0 · test:e2e 213/0 (temiz tam koşu). Not: ayrı bir tam koşuda 3 `admin-responsive` testi 60 sn zaman aşımına düştü (4 worker + Docker yükünde 390px testi tek başına 57,7 sn; sınırda, kod kaynaklı değil, testler gevşetilmedi) → olası flaky, izlenecek. Git: 90 dosya (14 R, 43 R+import, 33 yalnız import), yeni dosya yok.
 
-## MD-1 Favoriler (2026-11-08, D-088) — `LOCAL_PASS` · commit edilmedi
+## MD-1 Favoriler (2026-11-08, D-088) — `LOCAL_PASS` · commit `2f62d2e` (API) + `2f28a9a` (web)
 
 Plan/sözleşme: `docs/PLAN_CUSTOMER_EXPERIENCE.md`. Domain `CustomerFavorite`, tablo `customer_favorites` (migration `20261108091650_AddCustomerFavorites`, yalnız ekleyici), API `/api/v1/favorites`, web `features/favorites` + `/favorilerim`, Header/BottomNav/ProductCard'daki pasif "Yakında" kalpler gerçek oldu (D-023 favori kısmı kapandı).
 
@@ -683,7 +683,7 @@ Doğrulama: backend tam suite 2363/0/0 (gerçek PostgreSQL 17, tek kullanımlık
 QA (backend): PASS_WITH_FINDINGS, yalnız Low; 429 testi ve `TryParseExact("D")` düzeltildi. Kabul edilen Low: ürün görünürlük kontrolü kilit dışında (pasifleşme anında eklenen ürün listede `available:false`, zararsız). Flaky: ilk E2E koşularında hidrasyon öncesi tuş basışı kayboluyordu (gerçek kullanıcı sorunu) → kalp hidrasyona kadar `disabled`; sonra tam koşu ve 2× tekrar temiz.
 Dev DB: 2026-11-08 yedek `%LOCALAPPDATA%\SSCommerce\backups\sscommerce-dev-20261108T101320Z-before-favorites.dump` (PGDMP, 23 tablo verisi) → migration soketten uygulandı; geçmiş 7, ürün 10 değişmedi. Açık: `available:false` satırının E2E'si yok (ürün pasifleştirme fixture'ı gerekir; API testleri kapsıyor). Çalışan dev API (12:00'de başlatılan) eski koddur: favoriler için `.\dev` yeniden başlatılmalı.
 
-## MD-2 Profil (2026-11-08, D-089..D-091) — `LOCAL_PASS` · commit edilmedi
+## MD-2 Profil (2026-11-08, D-089..D-091) — `LOCAL_PASS` · commit `91c8da9` (API) + `2f28a9a` (web)
 
 Ortak hesap menüsü (Özet · Siparişlerim · Favorilerim · Adreslerim · Güvenlik), özet sayfası (üyelik künyesi, sayılar, son 3 sipariş), `/hesabim/guvenlik` parola değiştirme; `POST /auth/password`, `createdAt`. Şema değişikliği yok.
 
@@ -691,14 +691,14 @@ Doğrulama: backend TEK birleşik tam koşu 2409/0/0 (gerçek PostgreSQL 17, var
 QA (backend): PASS_WITH_FINDINGS, yalnız Low. Uygulanan: başarısız parola değiştirme denemeleri logda girişten ayrı; tahmin kanalı yok regresyonu. Kabul: paralel yanlış denemelerde kilit öncesi fazladan tahmin (login ile aynı, IP hız sınırıyla sınırlı), yarış kaybedeninin nadiren 400 alması (parola değişmez).
 E2E'nin yakaladığı gerçek hata: çıkış → aynı sekmede yeniden giriş → `/hesabim` "giriş yap" gösteriyordu (önbellekteki rota durumu); kod düzeltildi, 6 mevcut test yeşile döndü. Ek: sipariş/admin/checkout saatleri İstanbul saatine geçti. Açık (MD-3'te düzeltiliyor): 390px'te hesap menüsü sol kenar boşluğu; favori deposunda okuma/yazma yarışı.
 
-## MD-3 Detay sayfaları (2026-11-08) — `LOCAL_PASS` · commit edilmedi
+## MD-3 Detay sayfaları (2026-11-08) — `LOCAL_PASS` · commit `2f28a9a`
 
 Ürün galerisi, ürün sayfasında kalp, teslimat/iptal bloğu, benzer ürünler, mobil sabit sepete ekle çubuğu; sipariş detayında zaman çizelgesi; AccountNav 390px kenar boşluğu; favori deposu okuma/yazma yarışı düzeltildi (`features/favorites/sync.ts`, `tests/server/favorites-sync.test.mjs` 8 deterministik test). Backend değişikliği yok. Yeni Playwright projesi `product-detail` (vitrine kendi kategori/ürünlerini yazdığı için tek worker, `admin-limits`'ten sonra).
 
 Doğrulama: typecheck 0, lint 0, test:server 49/0, tam test:e2e 251/0/0 (taban 238 + 13), çubuk testleri `--repeat-each=3` 48/0. 390 ve 1280px gerçek backend ekran görüntüleriyle gözle kontrol (ana ajan inceledi).
 E2E/gözle bulunan gerçek hatalar: çubuğun opaklık geçişi sırasında axe kontrast ihlali (yalnız kaydırma geçişine çevrildi); çubuk sayfa açılışında ürün başlığını örtüyordu (kural "form görünmüyor" yerine "form geçildi" oldu; IntersectionObserver ani atlamaları kaçırdığı için scroll/resize + ResizeObserver). Not: kısa sayfalarda çubuğun görünür aralığı kısadır (footer görününce gizlenir). MD-4 yasal sayfalar ürün sahibinin metinlerini bekliyor.
 
-## Vitrin paketi VT-1..VT-3 (2026-11-08, D-092, D-093) — doğrulama sürüyor
+## Vitrin paketi VT-1..VT-3 (2026-11-08, D-092, D-093) — `LOCAL_PASS` (doğrulama aşağıda)
 
 `add6d2c` (VT-1 yasal sayfalar + VT-2 seed/demo giriş kodu) önceki ajanlar API limitiyle kesildikten sonra commit ve push edildi; VT-2 testleri ve kök PNG'nin hariç tutulması eksikti. Bu turda:
 - VT-2 testleri: `Showcase/{DemoSignInApiTests,ShowcaseSeedCommandTests,ShowcaseAccountProtectionTests,SeededShowcaseFixture}.cs`, validator testleri `Observability/ProductionConfigurationTests.cs`. Bir mutasyon denemesi (rol kontrolü kaldırılınca yanlış-rol testleri 3/3 kırmızı).
@@ -708,13 +708,17 @@ E2E/gözle bulunan gerçek hatalar: çubuğun opaklık geçişi sırasında axe 
 - Kök PNG takipten çıkarıldı ve `.gitignore`'a eklendi (geçmişte `add6d2c`'de duruyor).
 Test edilmeyenler: eşzamanlı iki seed koşusu; yanlış-rol durumunda seed atomik değil (yetki verilmez, testli).
 
-### VT-3 E2E doğrulaması (2026-11-09) — `LOCAL_PASS` · commit edilmedi
+### VT-3 E2E doğrulaması (2026-11-09) — `LOCAL_PASS` · commit `529fba0` (API) + `4fe8dfa` (web)
 
 Tam `test:e2e` (tek kullanımlık PostgreSQL 17): 285 geçti / 1 kaldı / 5 koşmadı (serial zincir). Tek hata test kaynaklıydı: `page.getByRole("alert")` hem uyarı kutusunu hem Next.js `__next-route-announcer__` öğesini buluyordu (strict mode); 409 ve 429 testleri `main` içine daraltıldı. Ardından `showcase` projesi tek başına (`--no-deps`) 11/11 geçti. Not: tam koşu düzeltmeden sonra tek seferde yeniden çalıştırılmadı; diğer 285 test aynı uygulama koduyla geçti. typecheck 0, lint 0, test:server 49/0. VT-4 (README + GIF) sırada.
 
-### VT-4 Vitrin README'si (2026-11-09) — `LOCAL_PASS` · commit edilmedi
+### VT-4 Vitrin README'si (2026-11-09) — `LOCAL_PASS` · commit `30c7301`
 
 `README.md` başına vitrin bölümü eklendi: demo hesaplar, müşteri/alışveriş/yönetim GIF'leri, ekran görüntüleri, "Bilinen sınırlar (vitrin)", "Künye". Medya `docs/media/` (3 GIF ≈ 8,8 MB + 11 PNG; toplam ≈ 11 MB).
 
 Yöntem: üretim derlemesi + `SSCommerce.E2eHost` API'si (yalıtılmış tek kullanımlık PostgreSQL 17) + `--seed-showcase`; Playwright CDP screencast → 20 fps GIF (`readme-media`). Kayıtlar gerçek uygulamadan; hiçbir ekran taklit değil. Kayıt sırasında demo müşteri bir sipariş verdi (SS-100006) — yalnız geçici veritabanında, silindi.
 Yapılmayanlar: `.\dev -Showcase` bu makinede çalıştırılmadı (dev veritabanı parolası Claude'a kapalı); README'de açıkça yazıldı. GIF boyutları skill'in örneklerinden büyük (mobil 3,2–3,3 MB; çok sayfa geçişi); küçültme istenirse fps/palet düşürülebilir. Gözle kontrol: 3 akışın kare şeritleri ve son kareler incelendi; ara geçişlerde uygulamanın gerçek "yükleniyor" durumları kısa görünür.
+
+## Durum (2026-11-14): tamamlandı, `main`'de
+
+`feat/phase-3-4-complete` PR #1 ile 2026-11-09'da `main`'e birleştirildi (`06ff710`); yerelde commit'lenmemiş ya da push edilmemiş iş yok. Bu tarihte son kod üzerinde yeniden koşulanlar: backend `dotnet build -c Release` 0 uyarı / 0 hata; `dotnet test -c Release` gerçek PostgreSQL 17'ye (tek kullanımlık konteyner) karşı **2559 geçti / 0 kaldı / 0 atlandı**; web typecheck 0, lint 0, `test:server` 49/0. Tam `test:e2e` bu tarihte yeniden koşulmadı (son tam koşu VT-3 bölümünde). Açık dış bağımlılıklar değişmedi: barındırma/herkese açık TLS, hosted CI (GitHub faturalandırma kilidi), sürüm etiketi. README başı vitrin biçimine getirildi (rozetler, öne çıkanlar).

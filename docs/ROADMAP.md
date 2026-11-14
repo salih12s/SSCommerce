@@ -9,13 +9,13 @@ Tek satıcılı, fiziksel ürün satan, TRY ile çalışan teknoloji/yaşam tarz
 | 0 | Repository ve geliştirici hazırlığı | Git, temel dosyalar, araç envanteri, dokümantasyon | PASS (yerel) |
 | 1 | Çalışan full-stack temel | ASP.NET Core 10 API, PostgreSQL + Docker Compose, Next.js iskeleti, CI | PASS (yerel); uzak CI BLOCKED_EXTERNAL |
 | 2 | Storefront tasarım temeli | Tasarım token'ları, bileşenler, responsive ana sayfa (demo verisiyle) | PASS; tasarım 2026-10-29 onaylandı, korundu |
-| 3 | Catalog | Product → ProductVariant/SKU, kategori, gerçek katalog API'si ve sayfaları; ilk EF Core migration | PASS (yerel), 2026-10-29; commit onayı bekliyor |
-| 4 | Identity / Security | ASP.NET Core Identity, cookie oturumu, CSRF, rol modeli (müşteri/depo/yönetici) | PASS (yerel), 2026-10-29; `40f030b`, `feat/phase-3-4-complete` dalında |
-| 5 | Inventory | Warehouse/InventoryBalance, atomik stok hareketleri, public stok görünürlüğü (stok **rezervasyonu yok**) | PASS (yerel), 2026-11-01; `40f030b`, `feat/phase-3-4-complete` dalında |
-| 6 | Cart / Checkout | Sepet, adres ve teslimat bilgisi, salt okunur önizleme; sipariş ve ödeme adımı yok | PASS (yerel), 2026-11-01; `40f030b`, `feat/phase-3-4-complete` dalında |
-| 7 | Ordering | Sipariş oluşturma, fiyat snapshot'ı, idempotency anahtarı, sipariş durumları. **Gerçek ödeme olmadan** | PASS (yerel), 2026-11-02; `feat/phase-3-4-complete` dalında; uzak CI BLOCKED_EXTERNAL |
-| 8 | ERP / Admin | Aynı web uygulamasında `/admin`: katalog, stok ve sipariş yönetimi, ERP entegrasyon noktaları | VERIFIED, 2026-11-07; dev veritabanına AddAdminOperations uygulandı; `c8bba63` push edildi; main birleştirmesi onay bekliyor; uzak CI BLOCKED_EXTERNAL |
-| 9 | Üretim hazırlığı ve devir | Üretim imajları + HTTPS kenarı, güvenlik başlıkları/CSP, gözlemlenebilirlik, yedek/geri yükleme, yük ve tutarlılık, CI imaj işi, öğrenme haritası | LOCAL_PRODUCTION_EQUIVALENT (yerel, 2026-11-08); barındırma/herkese açık TLS/hosted CI `BLOCKED_EXTERNAL`; feature dalına push edildi (`919c7a9`); PR/main/tag onay bekliyor |
+| 3 | Catalog | Product → ProductVariant/SKU, kategori, gerçek katalog API'si ve sayfaları; ilk EF Core migration | PASS (yerel), 2026-10-29; main'de (PR #1, 2026-11-09) |
+| 4 | Identity / Security | ASP.NET Core Identity, cookie oturumu, CSRF, rol modeli (müşteri/depo/yönetici) | PASS (yerel), 2026-10-29; main'de (PR #1, 2026-11-09) |
+| 5 | Inventory | Warehouse/InventoryBalance, atomik stok hareketleri, public stok görünürlüğü (stok **rezervasyonu yok**) | PASS (yerel), 2026-11-01; main'de (PR #1, 2026-11-09) |
+| 6 | Cart / Checkout | Sepet, adres ve teslimat bilgisi, salt okunur önizleme; sipariş ve ödeme adımı yok | PASS (yerel), 2026-11-01; main'de (PR #1, 2026-11-09) |
+| 7 | Ordering | Sipariş oluşturma, fiyat snapshot'ı, idempotency anahtarı, sipariş durumları. **Gerçek ödeme olmadan** | PASS (yerel), 2026-11-02; main'de (PR #1, 2026-11-09); uzak CI BLOCKED_EXTERNAL |
+| 8 | ERP / Admin | Aynı web uygulamasında `/admin`: katalog, stok ve sipariş yönetimi, ERP entegrasyon noktaları | VERIFIED, 2026-11-07; dev veritabanına AddAdminOperations uygulandı; main'de (PR #1, 2026-11-09); uzak CI BLOCKED_EXTERNAL |
+| 9 | Üretim hazırlığı ve devir | Üretim imajları + HTTPS kenarı, güvenlik başlıkları/CSP, gözlemlenebilirlik, yedek/geri yükleme, yük ve tutarlılık, CI imaj işi, öğrenme haritası | LOCAL_PRODUCTION_EQUIVALENT (yerel, 2026-11-08); barındırma/herkese açık TLS/hosted CI `BLOCKED_EXTERNAL`; main'de (PR #1, 2026-11-09); sürüm etiketi yok |
 
 ### MVP dışı (sonraki sürümler)
 - **Gerçek ödeme entegrasyonu** (ödeme sağlayıcısı, 3D Secure, iade akışları).
